@@ -1,8 +1,24 @@
 import asyncio
+import time
 from typing import Optional
 import musicbrainzngs as mb
 from config import settings
 from models import SearchResult
+
+# Simple in-memory TTL cache for MB search results
+_cache: dict[str, tuple[float, object]] = {}
+_CACHE_TTL = 300  # 5 minutes
+
+
+def _cache_get(key: str) -> Optional[object]:
+    entry = _cache.get(key)
+    if entry and time.monotonic() - entry[0] < _CACHE_TTL:
+        return entry[1]
+    return None
+
+
+def _cache_set(key: str, value: object) -> None:
+    _cache[key] = (time.monotonic(), value)
 
 mb.set_useragent(
     settings.mb_useragent_app,
@@ -95,6 +111,11 @@ def _parse_recording(rec: dict) -> dict:
 
 
 async def search_recordings(query: str, limit: int = 25) -> list[SearchResult]:
+    key = f"recordings:{query}:{limit}"
+    cached = _cache_get(key)
+    if cached is not None:
+        return cached  # type: ignore[return-value]
+
     def _search():
         return mb.search_recordings(query, limit=limit)
 
@@ -106,21 +127,13 @@ async def search_recordings(query: str, limit: int = 25) -> list[SearchResult]:
     recordings = result.get("recording-list", [])
     parsed = [_parse_recording(r) for r in recordings]
 
-    # Fetch cover art for top results with a release_mbid
-    top_with_release = [p for p in parsed[:10] if p["release_mbid"]]
-    async with httpx.AsyncClient() as client:
-        tasks = [_fetch_cover_art_url(p["release_mbid"], client) for p in top_with_release]
-        covers = await asyncio.gather(*tasks, return_exceptions=True)
-
-    cover_map: dict[str, Optional[str]] = {}
-    for p, cover in zip(top_with_release, covers):
-        cover_map[p["release_mbid"]] = cover if not isinstance(cover, Exception) else None
-
     results = []
     for p in parsed:
-        cover_art_url = cover_map.get(p.get("release_mbid"), None)
+        release_mbid = p.get("release_mbid")
+        cover_art_url = f"{CAA_BASE}/{release_mbid}/front-250" if release_mbid else None
         results.append(SearchResult(cover_art_url=cover_art_url, **p))
 
+    _cache_set(key, results)
     return results
 
 
@@ -153,6 +166,11 @@ async def get_release_full(release_mbid: str) -> Optional[dict]:
 
 
 async def search_artists(query: str, limit: int = 5) -> list[dict]:
+    key = f"artists:{query}:{limit}"
+    cached = _cache_get(key)
+    if cached is not None:
+        return cached  # type: ignore[return-value]
+
     def _search():
         return mb.search_artists(query, limit=limit)
 
@@ -162,7 +180,7 @@ async def search_artists(query: str, limit: int = 5) -> list[dict]:
         return []
 
     artists = result.get("artist-list", [])
-    return [
+    out = [
         {
             "mbid": a["id"],
             "name": a.get("name", ""),
@@ -171,9 +189,16 @@ async def search_artists(query: str, limit: int = 5) -> list[dict]:
         }
         for a in artists
     ]
+    _cache_set(key, out)
+    return out
 
 
 async def search_release_groups(query: str, limit: int = 8) -> list[dict]:
+    key = f"rgs:{query}:{limit}"
+    cached = _cache_get(key)
+    if cached is not None:
+        return cached  # type: ignore[return-value]
+
     def _search():
         return mb.search_release_groups(query, limit=limit)
 
@@ -208,6 +233,7 @@ async def search_release_groups(query: str, limit: int = 8) -> list[dict]:
             "cover_art_url": f"{CAA_RG_BASE}/{rg['id']}/front-250",
         })
 
+    _cache_set(key, parsed)
     return parsed
 
 

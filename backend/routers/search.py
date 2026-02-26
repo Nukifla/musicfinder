@@ -1,3 +1,4 @@
+import asyncio
 from fastapi import APIRouter, HTTPException, Query
 from models import SearchResult, UnifiedResult, ArtistDetail, ReleaseGroupDetail
 from services.musicbrainz import (
@@ -14,7 +15,6 @@ router = APIRouter(prefix="/api/search", tags=["search"])
 
 @router.get("", response_model=list[UnifiedResult])
 async def search(q: str = Query(..., min_length=1)):
-    # Run sequentially to respect MB rate limit
     artists = await search_artists(q, limit=5)
     rgroups = await search_release_groups(q, limit=8)
     recordings = await search_recordings(q, limit=5)
