@@ -1,0 +1,70 @@
+import { useState } from 'react'
+import { Save } from 'lucide-react'
+import { Settings, updateSettings } from '../../api/settings'
+
+interface Props {
+  initialSettings: Settings
+  onSaved: (s: Settings) => void
+}
+
+export default function SettingsForm({ initialSettings, onSaved }: Props) {
+  const [form, setForm] = useState<Settings>(initialSettings)
+  const [saving, setSaving] = useState(false)
+  const [saved, setSaved] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setSaving(true)
+    setError(null)
+    try {
+      const updated = await updateSettings(form)
+      onSaved(updated)
+      setSaved(true)
+      setTimeout(() => setSaved(false), 2000)
+    } catch {
+      setError('Failed to save settings')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  return (
+    <form onSubmit={handleSubmit} className="flex flex-col gap-5 max-w-lg">
+      <div className="flex flex-col gap-1.5">
+        <label className="text-xs font-medium text-zinc-400">Path Template</label>
+        <input
+          type="text"
+          value={form.path_template}
+          onChange={(e) => setForm({ ...form, path_template: e.target.value })}
+          className="bg-surface-card border border-surface-border rounded-lg px-3 py-2 text-sm text-zinc-100 focus:outline-none focus:border-accent focus:ring-1 focus:ring-accent transition-colors font-mono"
+        />
+        <p className="text-xs text-zinc-600">
+          Variables: {'{artist}'}, {'{album}'}, {'{title}'}, {'{track}'}, {'{year}'}
+        </p>
+      </div>
+
+      <div className="flex flex-col gap-1.5">
+        <label className="text-xs font-medium text-zinc-400">Audio Format Selector</label>
+        <input
+          type="text"
+          value={form.default_format}
+          onChange={(e) => setForm({ ...form, default_format: e.target.value })}
+          className="bg-surface-card border border-surface-border rounded-lg px-3 py-2 text-sm text-zinc-100 focus:outline-none focus:border-accent focus:ring-1 focus:ring-accent transition-colors font-mono"
+        />
+        <p className="text-xs text-zinc-600">yt-dlp format selector. Files are not transcoded — you get Opus or AAC as YouTube provides.</p>
+      </div>
+
+      {error && <p className="text-xs text-red-400">{error}</p>}
+
+      <button
+        type="submit"
+        disabled={saving}
+        className="flex items-center gap-2 px-4 py-2 rounded-lg bg-accent hover:bg-accent-light disabled:opacity-50 text-sm font-medium transition-colors w-fit"
+      >
+        <Save size={14} />
+        {saving ? 'Saving…' : saved ? 'Saved!' : 'Save Settings'}
+      </button>
+    </form>
+  )
+}

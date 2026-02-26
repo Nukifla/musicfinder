@@ -1,0 +1,101 @@
+import { Download, Clock, User, ChevronRight } from 'lucide-react'
+import { useNavigate } from 'react-router-dom'
+import AlbumArt from './AlbumArt'
+import { UnifiedResult } from '../../api/search'
+
+interface Props {
+  result: UnifiedResult
+  onDownload?: (result: UnifiedResult) => void
+  downloading?: boolean
+}
+
+function formatDuration(ms: number | null | undefined): string {
+  if (!ms) return ''
+  const total = Math.round(ms / 1000)
+  const m = Math.floor(total / 60)
+  const s = total % 60
+  return `${m}:${s.toString().padStart(2, '0')}`
+}
+
+const baseCard = 'flex items-center gap-4 px-4 py-3 rounded-xl bg-surface-card border border-surface-border transition-all'
+
+export default function UnifiedResultCard({ result, onDownload, downloading = false }: Props) {
+  const navigate = useNavigate()
+
+  if (result.type === 'artist') {
+    return (
+      <div
+        className={`${baseCard} cursor-pointer hover:border-accent/40 hover:bg-surface-hover`}
+        onClick={() => navigate(`/artist/${result.mbid}`)}
+      >
+        <div className="w-12 h-12 rounded-md bg-surface-hover flex items-center justify-center shrink-0">
+          <User size={20} className="text-accent-light" />
+        </div>
+        <div className="flex-1 min-w-0">
+          <p className="text-sm font-semibold text-zinc-100 truncate">{result.name}</p>
+          {result.disambiguation && (
+            <p className="text-xs text-zinc-500 truncate mt-0.5">{result.disambiguation}</p>
+          )}
+        </div>
+        <ChevronRight size={16} className="text-zinc-500 shrink-0" />
+      </div>
+    )
+  }
+
+  if (result.type === 'release_group') {
+    return (
+      <div
+        className={`${baseCard} cursor-pointer hover:border-accent/40 hover:bg-surface-hover`}
+        onClick={() => navigate(`/album/${result.mbid}`)}
+      >
+        <AlbumArt url={result.cover_art_url ?? null} title={result.name} size={48} />
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2">
+            <p className="text-sm font-semibold text-zinc-100 truncate">{result.name}</p>
+            {result.release_type && (
+              <span className="shrink-0 text-[10px] font-medium px-1.5 py-0.5 rounded bg-accent-muted text-accent-light">
+                {result.release_type}
+              </span>
+            )}
+          </div>
+          <p className="text-xs text-zinc-400 truncate mt-0.5">
+            {result.artist}
+            {result.year && <span className="text-zinc-600"> · {result.year}</span>}
+          </p>
+        </div>
+        <ChevronRight size={16} className="text-zinc-500 shrink-0" />
+      </div>
+    )
+  }
+
+  // recording
+  return (
+    <div className={`${baseCard} hover:border-accent/40 hover:bg-surface-hover group`}>
+      <AlbumArt url={result.cover_art_url ?? null} title={result.name} size={48} />
+      <div className="flex-1 min-w-0">
+        <p className="text-sm font-semibold text-zinc-100 truncate">{result.name}</p>
+        <p className="text-xs text-zinc-400 truncate mt-0.5">
+          {result.artist}
+          {result.album && <span className="text-zinc-600"> · {result.album}</span>}
+          {result.year && <span className="text-zinc-600"> · {result.year}</span>}
+        </p>
+      </div>
+      <div className="flex items-center gap-4 shrink-0">
+        {result.duration_ms && (
+          <span className="text-xs text-zinc-500 flex items-center gap-1">
+            <Clock size={12} />
+            {formatDuration(result.duration_ms)}
+          </span>
+        )}
+        <button
+          onClick={() => onDownload?.(result)}
+          disabled={downloading}
+          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-accent hover:bg-accent-light disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+        >
+          <Download size={13} />
+          {downloading ? 'Adding…' : 'Download'}
+        </button>
+      </div>
+    </div>
+  )
+}

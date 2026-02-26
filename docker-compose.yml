@@ -1,0 +1,16 @@
+services:
+  musicfinder:
+    build: .
+    container_name: musicfinder
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./data/db:/app/data/db
+      - ./data/cookies:/app/cookies
+      - ${MUSIC_DIR:-./music}:/music
+    environment:
+      - MUSIC_DIR=/music
+      - DB_PATH=/app/data/db/musicfinder.db
+      - COOKIES_PATH=/app/cookies/cookies.txt
+      - MB_USERAGENT_EMAIL=${MB_USERAGENT_EMAIL:-musicfinder@localhost}
