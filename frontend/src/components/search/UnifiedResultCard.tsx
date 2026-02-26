@@ -1,7 +1,29 @@
 import { Download, Clock, User, ChevronRight } from 'lucide-react'
+import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import AlbumArt from './AlbumArt'
 import { UnifiedResult } from '../../api/search'
+
+function ArtistThumb({ url, name }: { url: string | null | undefined; name: string }) {
+  const [failed, setFailed] = useState(false)
+  if (url && !failed) {
+    return (
+      <img
+        src={url}
+        alt={name}
+        width={48}
+        height={48}
+        className="w-12 h-12 rounded-full object-cover shrink-0"
+        onError={() => setFailed(true)}
+      />
+    )
+  }
+  return (
+    <div className="w-12 h-12 rounded-full bg-surface-hover flex items-center justify-center shrink-0">
+      <User size={20} className="text-accent-light" />
+    </div>
+  )
+}
 
 interface Props {
   result: UnifiedResult
@@ -28,9 +50,7 @@ export default function UnifiedResultCard({ result, onDownload, downloading = fa
         className={`${baseCard} cursor-pointer hover:border-accent/40 hover:bg-surface-hover`}
         onClick={() => navigate(`/artist/${result.mbid}`)}
       >
-        <div className="w-12 h-12 rounded-md bg-surface-hover flex items-center justify-center shrink-0">
-          <User size={20} className="text-accent-light" />
-        </div>
+        <ArtistThumb url={result.cover_art_url} name={result.name} />
         <div className="flex-1 min-w-0">
           <p className="text-sm font-semibold text-zinc-100 truncate">{result.name}</p>
           {result.disambiguation && (

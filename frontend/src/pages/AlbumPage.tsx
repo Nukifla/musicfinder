@@ -54,7 +54,6 @@ export default function AlbumPage() {
           download(track.mbid, track.title, detail.artist, detail.title, detail.release_mbid),
         ),
       )
-      navigate('/queue')
     } catch {
       // noop
     } finally {

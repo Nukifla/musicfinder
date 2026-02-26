@@ -28,6 +28,7 @@ async def search(q: str = Query(..., min_length=1)):
             name=a["name"],
             score=a["score"],
             disambiguation=a.get("disambiguation"),
+            cover_art_url=a.get("image_url"),
         ))
 
     for rg in rgroups:

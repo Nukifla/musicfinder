@@ -1,6 +1,7 @@
 import asyncio
 import time
 from typing import Optional
+from urllib.parse import quote as urlquote, unquote as urlunquote
 import musicbrainzngs as mb
 from config import settings
 from models import SearchResult
@@ -54,6 +55,81 @@ async def _fetch_rg_cover_art_url(rg_mbid: str, client: httpx.AsyncClient) -> Op
         return None
     except Exception:
         return None
+
+
+_WIKIMEDIA_UA = {"User-Agent": "musicfinder/0.1 (https://github.com/Nukifla/musicfinder)"}
+
+
+async def _wikimedia_thumburl(filename: str, client: httpx.AsyncClient) -> Optional[str]:
+    """Resolve a Wikimedia Commons filename to a direct CDN thumbnail URL."""
+    cache_key = f"commons_thumb:{filename}"
+    cached = _cache_get(cache_key)
+    if cached is not None:
+        return cached  # type: ignore[return-value]
+    try:
+        api_url = (
+            "https://commons.wikimedia.org/w/api.php"
+            f"?action=query&titles=File:{urlquote(filename)}"
+            "&prop=imageinfo&iiprop=url&iiurlwidth=300&format=json"
+        )
+        r = await client.get(api_url, timeout=4.0, headers=_WIKIMEDIA_UA)
+        if r.status_code == 200:
+            pages = r.json().get("query", {}).get("pages", {})
+            for page in pages.values():
+                thumburl = (page.get("imageinfo") or [{}])[0].get("thumburl")
+                if thumburl:
+                    _cache_set(cache_key, thumburl)
+                    return thumburl
+    except Exception:
+        pass
+    _cache_set(cache_key, None)
+    return None
+
+
+async def _fetch_artist_image(url_rels: list[dict], client: httpx.AsyncClient) -> Optional[str]:
+    """Try to find an artist image from MB URL relations."""
+    filename: Optional[str] = None
+
+    # Priority 1: direct Wikimedia Commons image link
+    for rel in url_rels:
+        if rel.get("type") == "image":
+            target = rel.get("target", "")
+            if "/File:" in target:
+                filename = target.split("/File:", 1)[-1]
+                break
+
+    # Priority 2: Wikidata P18 (image) property
+    if not filename:
+        for rel in url_rels:
+            if rel.get("type") == "wikidata":
+                target = rel.get("target", "")
+                qid = target.rstrip("/").split("/")[-1]
+                if not qid.startswith("Q"):
+                    continue
+                wd_cache_key = f"wikidata_img:{qid}"
+                cached = _cache_get(wd_cache_key)
+                if cached is not None:
+                    return cached  # type: ignore[return-value]
+                try:
+                    r = await client.get(
+                        f"https://www.wikidata.org/w/api.php"
+                        f"?action=wbgetclaims&entity={qid}&property=P18&format=json",
+                        timeout=3.0, headers=_WIKIMEDIA_UA,
+                    )
+                    if r.status_code == 200:
+                        claims = r.json().get("claims", {}).get("P18", [])
+                        if claims:
+                            filename = claims[0]["mainsnak"]["datavalue"]["value"]
+                except Exception:
+                    pass
+                if not filename:
+                    _cache_set(wd_cache_key, None)
+                break  # only try first wikidata rel
+
+    if not filename:
+        return None
+
+    return await _wikimedia_thumburl(filename, client)
 
 
 def _parse_recording(rec: dict) -> dict:
@@ -165,6 +241,76 @@ async def get_release_full(release_mbid: str) -> Optional[dict]:
         return None
 
 
+async def _fetch_artist_images_sparql(mbids: list[str]) -> dict[str, str]:
+    """Single SPARQL + batch Wikimedia call to get image URLs for multiple artist MBIDs."""
+    if not mbids:
+        return {}
+    values = " ".join(f'"{m}"' for m in mbids)
+    query = (
+        "SELECT ?mbid ?image WHERE {"
+        f" VALUES ?mbid {{ {values} }}"
+        " ?artist wdt:P434 ?mbid ."
+        " ?artist wdt:P18 ?image . }"
+    )
+    try:
+        async with httpx.AsyncClient() as client:
+            r = await client.get(
+                "https://query.wikidata.org/sparql",
+                params={"query": query, "format": "json"},
+                headers={**_WIKIMEDIA_UA, "Accept": "application/sparql-results+json"},
+                timeout=5.0,
+            )
+            if r.status_code != 200:
+                return {}
+
+            bindings = r.json().get("results", {}).get("bindings", [])
+            # Extract filename per mbid
+            filename_by_mbid: dict[str, str] = {}
+            for row in bindings:
+                mbid = row.get("mbid", {}).get("value", "")
+                image_val = row.get("image", {}).get("value", "")
+                if "/Special:FilePath/" in image_val:
+                    filename = urlunquote(image_val.split("/Special:FilePath/", 1)[-1])
+                    filename_by_mbid[mbid] = filename
+
+            if not filename_by_mbid:
+                return {}
+
+            # Batch Wikimedia Commons API for direct CDN thumbnail URLs
+            titles = "|".join(f"File:{f}" for f in filename_by_mbid.values())
+            r2 = await client.get(
+                "https://commons.wikimedia.org/w/api.php",
+                params={
+                    "action": "query", "titles": titles,
+                    "prop": "imageinfo", "iiprop": "url",
+                    "iiurlwidth": "250", "format": "json",
+                },
+                headers=_WIKIMEDIA_UA,
+                timeout=5.0,
+            )
+            if r2.status_code != 200:
+                return {}
+
+            pages = r2.json().get("query", {}).get("pages", {})
+            thumb_by_filename: dict[str, str] = {}
+            for page in pages.values():
+                title = page.get("title", "")
+                if title.startswith("File:"):
+                    fname = title[5:]
+                    ii = (page.get("imageinfo") or [{}])[0]
+                    thumburl = ii.get("thumburl")
+                    if thumburl:
+                        thumb_by_filename[fname] = thumburl
+
+            return {
+                mbid: thumb_by_filename[fname]
+                for mbid, fname in filename_by_mbid.items()
+                if fname in thumb_by_filename
+            }
+    except Exception:
+        return {}
+
+
 async def search_artists(query: str, limit: int = 5) -> list[dict]:
     key = f"artists:{query}:{limit}"
     cached = _cache_get(key)
@@ -189,6 +335,11 @@ async def search_artists(query: str, limit: int = 5) -> list[dict]:
         }
         for a in artists
     ]
+
+    image_map = await _fetch_artist_images_sparql([a["mbid"] for a in out])
+    for a in out:
+        a["image_url"] = image_map.get(a["mbid"])
+
     _cache_set(key, out)
     return out
 
@@ -248,8 +399,13 @@ def _date_to_int(date_str: str) -> int:
 
 
 async def get_artist_release_groups(artist_mbid: str) -> dict:
+    cache_key = f"artist:{artist_mbid}"
+    cached = _cache_get(cache_key)
+    if cached is not None:
+        return cached  # type: ignore[return-value]
+
     def _lookup():
-        return mb.get_artist_by_id(artist_mbid, includes=["release-groups"])
+        return mb.get_artist_by_id(artist_mbid, includes=["release-groups", "url-rels"])
 
     try:
         result = await asyncio.to_thread(_lookup)
@@ -258,6 +414,7 @@ async def get_artist_release_groups(artist_mbid: str) -> dict:
 
     artist = result.get("artist", {})
     rg_list = artist.get("release-group-list", [])
+    url_rels = artist.get("url-relation-list", [])
 
     # Sort by date ascending
     rg_list_sorted = sorted(rg_list, key=lambda r: _date_to_int(r.get("first-release-date", "")))
@@ -274,15 +431,26 @@ async def get_artist_release_groups(artist_mbid: str) -> dict:
             "cover_art_url": f"{CAA_RG_BASE}/{rg['id']}/front-250",
         })
 
-    return {
+    async with httpx.AsyncClient() as client:
+        image_url = await _fetch_artist_image(url_rels, client)
+
+    out = {
         "mbid": artist.get("id", artist_mbid),
         "name": artist.get("name", ""),
         "disambiguation": artist.get("disambiguation"),
+        "image_url": image_url,
         "release_groups": parsed,
     }
+    _cache_set(cache_key, out)
+    return out
 
 
 async def get_release_group_tracklist(rg_mbid: str) -> dict:
+    cache_key = f"rg_tracklist:{rg_mbid}"
+    cached = _cache_get(cache_key)
+    if cached is not None:
+        return cached  # type: ignore[return-value]
+
     # Step 1: browse releases in the release group to pick the best one
     def _browse():
         return mb.browse_releases(release_group=rg_mbid, includes=["media"])
@@ -354,7 +522,7 @@ async def get_release_group_tracklist(rg_mbid: str) -> dict:
                 "duration_ms": duration_ms,
             })
 
-    return {
+    out = {
         "release_mbid": release_mbid,
         "cover_art_url": f"{CAA_BASE}/{release_mbid}/front-250",
         "rg_mbid": rg_mbid,
@@ -364,3 +532,5 @@ async def get_release_group_tracklist(rg_mbid: str) -> dict:
         "year": year,
         "tracks": tracks,
     }
+    _cache_set(cache_key, out)
+    return out
