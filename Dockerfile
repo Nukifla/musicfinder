@@ -25,7 +25,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY backend/ ./
 
 # Copy built frontend into backend/static
-COPY --from=frontend-build /frontend/dist ./static
+COPY --from=frontend-build /backend/static ./static
 
 # Create runtime directories
 RUN mkdir -p /app/data/db /app/cookies /tmp/musicfinder /music
