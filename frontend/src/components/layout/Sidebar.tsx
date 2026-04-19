@@ -32,7 +32,7 @@ export default function Sidebar() {
               location.pathname.startsWith('/artist/') ||
               location.pathname.startsWith('/album/')
             if (isBrowse) navigate('/')
-            else navigate(-1)
+            else navigate('/')
           }}
           className={`${baseClass} ${isBrowseActive ? activeClass : inactiveClass}`}
         >
