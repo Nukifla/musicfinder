@@ -1,6 +1,7 @@
 import asyncio
 from fastapi import APIRouter, HTTPException, Query
 from models import SearchResult, UnifiedResult, ArtistDetail, ReleaseGroupDetail
+from database import get_db
 from services.musicbrainz import (
     search_recordings,
     search_artists,
@@ -15,49 +16,36 @@ router = APIRouter(prefix="/api/search", tags=["search"])
 
 @router.get("", response_model=list[UnifiedResult])
 async def search(q: str = Query(..., min_length=1)):
-    artists = await search_artists(q, limit=5)
-    rgroups = await search_release_groups(q, limit=8)
-    recordings = await search_recordings(q, limit=5)
+    db = await get_db()
+    async with db.execute("SELECT value FROM settings WHERE key='search_artist_images'") as cur:
+        row = await cur.fetchone()
+    include_images = bool(row and row["value"].lower() == "true")
+
+    artists, rgroups, recordings = await asyncio.gather(
+        search_artists(q, limit=5, include_images=include_images),
+        search_release_groups(q, limit=8),
+        search_recordings(q, limit=5),
+    )
 
     results: list[UnifiedResult] = []
 
     for a in artists:
         results.append(UnifiedResult(
-            type="artist",
-            mbid=a["mbid"],
-            name=a["name"],
-            score=a["score"],
-            disambiguation=a.get("disambiguation"),
-            cover_art_url=a.get("image_url"),
+            type="artist", mbid=a["mbid"], name=a["name"], score=a["score"],
+            disambiguation=a.get("disambiguation"), cover_art_url=a.get("image_url"),
         ))
-
     for rg in rgroups:
         results.append(UnifiedResult(
-            type="release_group",
-            mbid=rg["mbid"],
-            name=rg["title"],
-            score=rg["score"],
-            artist=rg.get("artist"),
-            artist_mbid=rg.get("artist_mbid"),
-            release_type=rg.get("type"),
-            year=rg.get("year"),
-            cover_art_url=rg.get("cover_art_url"),
+            type="release_group", mbid=rg["mbid"], name=rg["title"], score=rg["score"],
+            artist=rg.get("artist"), artist_mbid=rg.get("artist_mbid"),
+            release_type=rg.get("type"), year=rg.get("year"), cover_art_url=rg.get("cover_art_url"),
         ))
-
     for rec in recordings:
         results.append(UnifiedResult(
-            type="recording",
-            mbid=rec.mbid,
-            name=rec.title,
-            score=rec.score,
-            artist=rec.artist,
-            artist_mbid=rec.artist_mbid,
-            album=rec.album,
-            release_mbid=rec.release_mbid,
-            track_number=rec.track_number,
-            duration_ms=rec.duration_ms,
-            year=rec.year,
-            cover_art_url=rec.cover_art_url,
+            type="recording", mbid=rec.mbid, name=rec.title, score=rec.score,
+            artist=rec.artist, artist_mbid=rec.artist_mbid, album=rec.album,
+            release_mbid=rec.release_mbid, track_number=rec.track_number,
+            duration_ms=rec.duration_ms, year=rec.year, cover_art_url=rec.cover_art_url,
         ))
 
     results.sort(key=lambda r: r.score, reverse=True)

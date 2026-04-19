@@ -1,19 +1,23 @@
-import { NavLink } from 'react-router-dom'
+import { useNavigate, useLocation, NavLink } from 'react-router-dom'
 import { Search, ListVideo, History, Settings } from 'lucide-react'
 import { useQueueStore } from '../../store/queueStore'
-
-const links = [
-  { to: '/', icon: Search, label: 'Search' },
-  { to: '/queue', icon: ListVideo, label: 'Queue' },
-  { to: '/history', icon: History, label: 'History' },
-  { to: '/settings', icon: Settings, label: 'Settings' },
-]
 
 export default function Sidebar() {
   const jobs = useQueueStore((s) => s.jobs)
   const activeCount = Object.values(jobs).filter(
     (j) => j.status !== 'complete' && j.status !== 'error'
   ).length
+  const navigate = useNavigate()
+  const location = useLocation()
+
+  const isBrowseActive =
+    location.pathname === '/' ||
+    location.pathname.startsWith('/artist/') ||
+    location.pathname.startsWith('/album/')
+
+  const baseClass = 'flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors'
+  const activeClass = 'bg-accent text-white'
+  const inactiveClass = 'text-zinc-400 hover:text-zinc-100 hover:bg-surface-hover'
 
   return (
     <aside className="w-56 shrink-0 bg-surface-card border-r border-surface-border flex flex-col py-4">
@@ -21,17 +25,31 @@ export default function Sidebar() {
         <span className="text-xl font-bold text-accent-light tracking-tight">MusicFinder</span>
       </div>
       <nav className="flex flex-col gap-1 px-2">
-        {links.map(({ to, icon: Icon, label }) => (
+        <button
+          onClick={() => {
+            if (location.pathname === '/') return
+            const isBrowse =
+              location.pathname.startsWith('/artist/') ||
+              location.pathname.startsWith('/album/')
+            if (isBrowse) navigate('/')
+            else navigate(-1)
+          }}
+          className={`${baseClass} ${isBrowseActive ? activeClass : inactiveClass}`}
+        >
+          <Search size={16} />
+          <span>Search</span>
+        </button>
+
+        {[
+          { to: '/queue', icon: ListVideo, label: 'Queue' },
+          { to: '/history', icon: History, label: 'History' },
+          { to: '/settings', icon: Settings, label: 'Settings' },
+        ].map(({ to, icon: Icon, label }) => (
           <NavLink
             key={to}
             to={to}
-            end={to === '/'}
             className={({ isActive }) =>
-              `flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
-                isActive
-                  ? 'bg-accent text-white'
-                  : 'text-zinc-400 hover:text-zinc-100 hover:bg-surface-hover'
-              }`
+              `${baseClass} ${isActive ? activeClass : inactiveClass}`
             }
           >
             <Icon size={16} />

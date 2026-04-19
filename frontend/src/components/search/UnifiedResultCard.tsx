@@ -1,4 +1,4 @@
-import { Download, Clock, User, ChevronRight } from 'lucide-react'
+import { Download, Clock, User, ChevronRight, CheckCircle2 } from 'lucide-react'
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import AlbumArt from './AlbumArt'
@@ -29,6 +29,7 @@ interface Props {
   result: UnifiedResult
   onDownload?: (result: UnifiedResult) => void
   downloading?: boolean
+  alreadyDownloaded?: boolean
 }
 
 function formatDuration(ms: number | null | undefined): string {
@@ -41,7 +42,7 @@ function formatDuration(ms: number | null | undefined): string {
 
 const baseCard = 'flex items-center gap-4 px-4 py-3 rounded-xl bg-surface-card border border-surface-border transition-all'
 
-export default function UnifiedResultCard({ result, onDownload, downloading = false }: Props) {
+export default function UnifiedResultCard({ result, onDownload, downloading = false, alreadyDownloaded = false }: Props) {
   const navigate = useNavigate()
 
   if (result.type === 'artist') {
@@ -110,10 +111,16 @@ export default function UnifiedResultCard({ result, onDownload, downloading = fa
         <button
           onClick={() => onDownload?.(result)}
           disabled={downloading}
-          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-accent hover:bg-accent-light disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${
+            alreadyDownloaded
+              ? 'bg-green-900/40 text-green-400 border border-green-700/50 hover:bg-green-900/60'
+              : 'bg-accent hover:bg-accent-light'
+          }`}
         >
-          <Download size={13} />
-          {downloading ? 'Adding…' : 'Download'}
+          {alreadyDownloaded
+            ? <CheckCircle2 size={13} />
+            : <Download size={13} />}
+          {downloading ? 'Adding…' : alreadyDownloaded ? 'Downloaded' : 'Download'}
         </button>
       </div>
     </div>

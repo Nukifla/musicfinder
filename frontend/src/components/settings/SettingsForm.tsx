@@ -55,6 +55,26 @@ export default function SettingsForm({ initialSettings, onSaved }: Props) {
         <p className="text-xs text-zinc-600">yt-dlp format selector. Files are not transcoded — you get Opus or AAC as YouTube provides.</p>
       </div>
 
+      <div className="flex items-start gap-3">
+        <button
+          type="button"
+          role="switch"
+          aria-checked={form.search_artist_images}
+          onClick={() => setForm({ ...form, search_artist_images: !form.search_artist_images })}
+          className={`relative shrink-0 mt-0.5 w-9 h-5 rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-accent ${
+            form.search_artist_images ? 'bg-accent' : 'bg-zinc-700'
+          }`}
+        >
+          <span className={`absolute top-0.5 left-0.5 w-4 h-4 rounded-full bg-white shadow transition-transform ${
+            form.search_artist_images ? 'translate-x-4' : 'translate-x-0'
+          }`} />
+        </button>
+        <div>
+          <p className="text-sm text-zinc-200">Show artist photos in search results</p>
+          <p className="text-xs text-zinc-600 mt-0.5">Fetches from Wikidata — adds ~1s to cold searches</p>
+        </div>
+      </div>
+
       {error && <p className="text-xs text-red-400">{error}</p>}
 
       <button

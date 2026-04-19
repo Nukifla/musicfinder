@@ -38,6 +38,7 @@ class ArtistDetail(BaseModel):
     mbid: str
     name: str
     disambiguation: Optional[str] = None
+    image_url: Optional[str] = None
     release_groups: list[ArtistReleaseGroup]
 
 
@@ -102,6 +103,7 @@ class DownloadResponse(BaseModel):
 class SettingsModel(BaseModel):
     path_template: str
     default_format: str
+    search_artist_images: bool = False
 
 
 class CookieStatus(BaseModel):

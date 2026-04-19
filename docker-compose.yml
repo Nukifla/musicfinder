@@ -1,6 +1,6 @@
 services:
   musicfinder:
-    build: .
+    image: ghcr.io/nukifla/musicfinder:latest
     container_name: musicfinder
     restart: unless-stopped
     ports:

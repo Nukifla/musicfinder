@@ -2,8 +2,10 @@ import { useEffect, useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { getArtist, getReleaseGroup, ArtistDetail, ArtistReleaseGroup } from '../api/search'
 import { useDownload } from '../hooks/useDownload'
+import { useNavStore } from '../store/navStore'
+import { checkLibrary } from '../api/library'
 import AlbumArt from '../components/search/AlbumArt'
-import { ChevronLeft, User, Download, Loader2 } from 'lucide-react'
+import { ChevronLeft, User, Download, Loader2, CheckCircle2 } from 'lucide-react'
 
 const TYPE_ORDER = ['Album', 'EP', 'Single', 'Other']
 
@@ -33,16 +35,72 @@ export default function ArtistPage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [downloadingRg, setDownloadingRg] = useState<string | null>(null)
+  const [downloadingType, setDownloadingType] = useState<string | null>(null)
+  const [downloadedRgMbids, setDownloadedRgMbids] = useState<Set<string>>(new Set())
   const { download } = useDownload()
+  const { setLastBrowseRoute, artistCache, albumCache, cacheArtist, cacheAlbum } = useNavStore()
 
   useEffect(() => {
     if (!mbid) return
+    setLastBrowseRoute(`/artist/${mbid}`)
+    const cached = artistCache[mbid]
+    if (cached) {
+      setArtist(cached)
+      setLoading(false)
+      return
+    }
     setLoading(true)
     getArtist(mbid)
-      .then(setArtist)
+      .then((data) => { cacheArtist(mbid, data); setArtist(data) })
       .catch(() => setError('Failed to load artist.'))
       .finally(() => setLoading(false))
   }, [mbid])
+
+  // Check which cached albums are fully downloaded
+  useEffect(() => {
+    if (!artist) return
+    const toCheck: { rgMbid: string; tracks: { mbid: string; title: string; artist: string }[] }[] = []
+    for (const rg of artist.release_groups) {
+      const cached = albumCache[rg.mbid]
+      if (cached) {
+        toCheck.push({
+          rgMbid: rg.mbid,
+          tracks: cached.tracks.map((t) => ({ mbid: t.mbid, title: t.title, artist: cached.artist })),
+        })
+      }
+    }
+    if (!toCheck.length) return
+    const allTracks = toCheck.flatMap((x) => x.tracks)
+    checkLibrary(allTracks).then((downloaded) => {
+      const fully = new Set<string>()
+      for (const { rgMbid, tracks } of toCheck) {
+        if (tracks.length > 0 && tracks.every((t) => downloaded.has(t.mbid))) fully.add(rgMbid)
+      }
+      setDownloadedRgMbids(fully)
+    }).catch(() => {})
+  }, [artist, albumCache])
+
+  // Prefetch album tracklists in the background so clicking an album loads instantly
+  useEffect(() => {
+    if (!artist) return
+    const uncached = artist.release_groups.filter(rg => !albumCache[rg.mbid])
+    if (uncached.length === 0) return
+
+    let cancelled = false
+    ;(async () => {
+      await new Promise(r => setTimeout(r, 500))
+      for (const rg of uncached) {
+        if (cancelled || albumCache[rg.mbid]) continue
+        try {
+          const data = await getReleaseGroup(rg.mbid)
+          if (!cancelled) cacheAlbum(rg.mbid, data)
+        } catch { /* non-critical */ }
+        if (!cancelled) await new Promise(r => setTimeout(r, 300))
+      }
+    })()
+
+    return () => { cancelled = true }
+  }, [artist])
 
   const handleDownloadAlbum = async (e: React.MouseEvent, rg: ArtistReleaseGroup) => {
     e.stopPropagation()
@@ -50,15 +108,52 @@ export default function ArtistPage() {
     setDownloadingRg(rg.mbid)
     try {
       const detail = await getReleaseGroup(rg.mbid)
-      await Promise.all(
-        detail.tracks.map((track) =>
-          download(track.mbid, track.title, detail.artist, detail.title, detail.release_mbid),
-        ),
+      cacheAlbum(rg.mbid, detail)
+      const downloaded = await checkLibrary(
+        detail.tracks.map((t) => ({ mbid: t.mbid, title: t.title, artist: detail.artist }))
       )
+      const missing = detail.tracks.filter((t) => !downloaded.has(t.mbid))
+      if (missing.length === 0) {
+        setDownloadedRgMbids((prev) => new Set([...prev, rg.mbid]))
+      } else {
+        await Promise.all(
+          missing.map((track) =>
+            download(track.mbid, track.title, detail.artist, detail.title, detail.release_mbid),
+          ),
+        )
+      }
     } catch {
       // noop
     } finally {
       setDownloadingRg(null)
+    }
+  }
+
+  const handleDownloadAll = async (type: string, items: ArtistReleaseGroup[]) => {
+    if (downloadingType) return
+    setDownloadingType(type)
+    try {
+      for (const rg of items) {
+        const detail = await getReleaseGroup(rg.mbid)
+        cacheAlbum(rg.mbid, detail)
+        const downloaded = await checkLibrary(
+          detail.tracks.map((t) => ({ mbid: t.mbid, title: t.title, artist: detail.artist }))
+        )
+        const missing = detail.tracks.filter((t) => !downloaded.has(t.mbid))
+        if (missing.length === 0) {
+          setDownloadedRgMbids((prev) => new Set([...prev, rg.mbid]))
+          continue
+        }
+        await Promise.all(
+          missing.map((track) =>
+            download(track.mbid, track.title, detail.artist, detail.title, detail.release_mbid),
+          ),
+        )
+      }
+    } catch {
+      // noop
+    } finally {
+      setDownloadingType(null)
     }
   }
 
@@ -88,7 +183,7 @@ export default function ArtistPage() {
   return (
     <div className="max-w-4xl">
       <button
-        onClick={() => navigate(-1)}
+        onClick={() => navigate('/')}
         className="flex items-center gap-1 text-sm text-zinc-400 hover:text-zinc-100 transition-colors mb-6"
       >
         <ChevronLeft size={16} />
@@ -110,37 +205,61 @@ export default function ArtistPage() {
         if (!items?.length) return null
         return (
           <section key={type} className="mt-8">
-            <h2 className="text-sm font-semibold text-zinc-400 uppercase tracking-wider mb-4">
-              {type === 'EP' ? 'EPs' : type === 'Other' ? 'Other Releases' : `${type}s`}
-            </h2>
-            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
-              {items.map((rg) => (
-                <div
-                  key={rg.mbid}
-                  onClick={() => navigate(`/album/${rg.mbid}`)}
-                  className="cursor-pointer group"
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-sm font-semibold text-zinc-400 uppercase tracking-wider">
+                {type === 'EP' ? 'EPs' : type === 'Other' ? 'Other Releases' : `${type}s`}
+              </h2>
+              {(type === 'Album' || type === 'Single') && (
+                <button
+                  onClick={() => handleDownloadAll(type, items)}
+                  disabled={!!downloadingType}
+                  className="flex items-center gap-1.5 text-xs text-zinc-400 hover:text-zinc-100 disabled:opacity-50 transition-colors"
+                  title={`Download all ${type.toLowerCase()}s`}
                 >
-                  <div className="relative rounded-lg overflow-hidden w-fit">
-                    <AlbumArt url={rg.cover_art_url} title={rg.title} size={160} />
-                    <button
-                      onClick={(e) => handleDownloadAlbum(e, rg)}
-                      disabled={downloadingRg === rg.mbid}
-                      className="absolute bottom-2 right-2 p-1.5 rounded-lg bg-black/70 text-white opacity-0 group-hover:opacity-100 transition-opacity hover:bg-accent disabled:opacity-60"
-                      title="Download album"
-                    >
-                      {downloadingRg === rg.mbid
-                        ? <Loader2 size={14} className="animate-spin" />
-                        : <Download size={14} />}
-                    </button>
+                  {downloadingType === type
+                    ? <Loader2 size={12} className="animate-spin" />
+                    : <Download size={12} />}
+                  Download all
+                </button>
+              )}
+            </div>
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
+              {items.map((rg) => {
+                const isDownloaded = downloadedRgMbids.has(rg.mbid)
+                return (
+                  <div
+                    key={rg.mbid}
+                    onClick={() => navigate(`/album/${rg.mbid}`)}
+                    className="cursor-pointer group"
+                  >
+                    <div className="relative rounded-lg overflow-hidden w-fit">
+                      <AlbumArt url={rg.cover_art_url} title={rg.title} size={160} />
+                      <button
+                        onClick={(e) => handleDownloadAlbum(e, rg)}
+                        disabled={downloadingRg === rg.mbid}
+                        className={`absolute bottom-2 right-2 p-1.5 rounded-lg transition-opacity disabled:opacity-60 ${isDownloaded ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'} ${
+                          isDownloaded
+                            ? 'bg-green-900/80 text-green-400 hover:bg-green-900'
+                            : 'bg-black/70 text-white hover:bg-accent'
+                        }`}
+                        title={isDownloaded ? 'Already downloaded' : 'Download album'}
+                      >
+                        {downloadingRg === rg.mbid
+                          ? <Loader2 size={14} className="animate-spin" />
+                          : isDownloaded
+                            ? <CheckCircle2 size={14} />
+                            : <Download size={14} />}
+                      </button>
+                    </div>
+                    <p className="mt-2 text-sm font-medium text-zinc-200 group-hover:text-white truncate transition-colors">
+                      {rg.title}
+                    </p>
+                    {rg.year && (
+                      <p className="text-xs text-zinc-500">{rg.year}</p>
+                    )}
                   </div>
-                  <p className="mt-2 text-sm font-medium text-zinc-200 group-hover:text-white truncate transition-colors">
-                    {rg.title}
-                  </p>
-                  {rg.year && (
-                    <p className="text-xs text-zinc-500">{rg.year}</p>
-                  )}
-                </div>
-              ))}
+                )
+              })}
             </div>
           </section>
         )

@@ -3,6 +3,7 @@ import client from './client'
 export interface Settings {
   path_template: string
   default_format: string
+  search_artist_images: boolean
 }
 
 export interface CookieStatus {

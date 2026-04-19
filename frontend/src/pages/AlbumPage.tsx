@@ -4,8 +4,10 @@ import { getReleaseGroup, ReleaseGroupDetail, TrackSummary } from '../api/search
 import { useDownload } from '../hooks/useDownload'
 import { useSSE } from '../hooks/useSSE'
 import { useQueueStore } from '../store/queueStore'
+import { useNavStore } from '../store/navStore'
+import { checkLibrary } from '../api/library'
 import AlbumArt from '../components/search/AlbumArt'
-import { ChevronLeft, Download, Clock, DiscAlbum } from 'lucide-react'
+import { ChevronLeft, Download, Clock, DiscAlbum, CheckCircle2 } from 'lucide-react'
 
 function formatDuration(ms: number | null): string {
   if (!ms) return ''
@@ -24,8 +26,10 @@ export default function AlbumPage() {
   const [downloadingIds, setDownloadingIds] = useState<Set<string>>(new Set())
   const [downloadingAll, setDownloadingAll] = useState(false)
   const [activeJobId, setActiveJobId] = useState<string | null>(null)
+  const [downloadedMbids, setDownloadedMbids] = useState<Set<string>>(new Set())
   const { download } = useDownload()
   const { updateJob } = useQueueStore()
+  const { setLastBrowseRoute, albumCache, cacheAlbum } = useNavStore()
 
   useSSE(
     `/api/progress/${activeJobId}`,
@@ -38,19 +42,34 @@ export default function AlbumPage() {
 
   useEffect(() => {
     if (!mbid) return
+    setLastBrowseRoute(`/album/${mbid}`)
+    const cached = albumCache[mbid]
+    if (cached) {
+      setDetail(cached)
+      setLoading(false)
+      return
+    }
     setLoading(true)
     getReleaseGroup(mbid)
-      .then(setDetail)
+      .then((data) => { cacheAlbum(mbid, data); setDetail(data) })
       .catch(() => setError('Failed to load album.'))
       .finally(() => setLoading(false))
   }, [mbid])
+
+  useEffect(() => {
+    if (!detail) return
+    checkLibrary(detail.tracks.map((t) => ({ mbid: t.mbid, title: t.title, artist: detail.artist })))
+      .then(setDownloadedMbids)
+      .catch(() => {})
+  }, [detail])
 
   const handleDownloadAll = async () => {
     if (!detail || downloadingAll) return
     setDownloadingAll(true)
     try {
+      const missing = detail.tracks.filter((t) => !downloadedMbids.has(t.mbid))
       await Promise.all(
-        detail.tracks.map((track) =>
+        missing.map((track) =>
           download(track.mbid, track.title, detail.artist, detail.title, detail.release_mbid),
         ),
       )
@@ -105,7 +124,7 @@ export default function AlbumPage() {
     <div className="max-w-3xl">
       <button
         onClick={() =>
-          detail.artist_mbid ? navigate(`/artist/${detail.artist_mbid}`) : navigate(-1)
+          navigate(detail.artist_mbid ? `/artist/${detail.artist_mbid}` : '/')
         }
         className="flex items-center gap-1 text-sm text-zinc-400 hover:text-zinc-100 transition-colors mb-6"
       >
@@ -124,14 +143,23 @@ export default function AlbumPage() {
             {detail.year && <span> · {detail.year}</span>}
             <span> · {detail.tracks.length} track{detail.tracks.length !== 1 ? 's' : ''}</span>
           </p>
-          <button
-            onClick={handleDownloadAll}
-            disabled={downloadingAll}
-            className="mt-3 self-start flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium bg-accent hover:bg-accent-light disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-          >
-            <DiscAlbum size={15} />
-            {downloadingAll ? 'Queuing…' : 'Download Album'}
-          </button>
+          {(() => {
+            const allDownloaded = detail.tracks.length > 0 && detail.tracks.every((t) => downloadedMbids.has(t.mbid))
+            return (
+              <button
+                onClick={handleDownloadAll}
+                disabled={downloadingAll}
+                className={`mt-3 self-start flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed transition-colors ${
+                  allDownloaded
+                    ? 'bg-green-900/40 text-green-400 border border-green-700/50 hover:bg-green-900/60'
+                    : 'bg-accent hover:bg-accent-light'
+                }`}
+              >
+                {allDownloaded ? <CheckCircle2 size={15} /> : <DiscAlbum size={15} />}
+                {downloadingAll ? 'Queuing…' : allDownloaded ? 'All Downloaded' : 'Download Album'}
+              </button>
+            )
+          })()}
         </div>
       </div>
 
@@ -152,10 +180,14 @@ export default function AlbumPage() {
             <button
               onClick={() => handleDownload(track)}
               disabled={downloadingIds.has(track.mbid)}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-accent hover:bg-accent-light disabled:opacity-50 disabled:cursor-not-allowed transition-colors shrink-0"
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium disabled:opacity-50 disabled:cursor-not-allowed transition-colors shrink-0 ${
+                downloadedMbids.has(track.mbid)
+                  ? 'bg-green-900/40 text-green-400 border border-green-700/50 hover:bg-green-900/60'
+                  : 'bg-accent hover:bg-accent-light'
+              }`}
             >
-              <Download size={13} />
-              {downloadingIds.has(track.mbid) ? 'Adding…' : 'Download'}
+              {downloadedMbids.has(track.mbid) ? <CheckCircle2 size={13} /> : <Download size={13} />}
+              {downloadingIds.has(track.mbid) ? 'Adding…' : downloadedMbids.has(track.mbid) ? 'Downloaded' : 'Download'}
             </button>
           </div>
         ))}

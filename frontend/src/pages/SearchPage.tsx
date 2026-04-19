@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import SearchBar from '../components/search/SearchBar'
 import UnifiedResultCard from '../components/search/UnifiedResultCard'
@@ -6,15 +6,29 @@ import { useSearch } from '../hooks/useSearch'
 import { useDownload } from '../hooks/useDownload'
 import { useSSE } from '../hooks/useSSE'
 import { useQueueStore } from '../store/queueStore'
+import { useNavStore } from '../store/navStore'
 import { UnifiedResult } from '../api/search'
+import { checkLibrary } from '../api/library'
 
 export default function SearchPage() {
   const { query, setQuery, results, loading, error } = useSearch()
+  const setLastBrowseRoute = useNavStore((s) => s.setLastBrowseRoute)
   const { download } = useDownload()
   const { updateJob } = useQueueStore()
   const [downloadingIds, setDownloadingIds] = useState<Set<string>>(new Set())
+  const [downloadedMbids, setDownloadedMbids] = useState<Set<string>>(new Set())
   const [activeJobId, setActiveJobId] = useState<string | null>(null)
   const navigate = useNavigate()
+
+  useEffect(() => { setLastBrowseRoute('/') }, [])
+
+  useEffect(() => {
+    const recordings = results.filter((r) => r.type === 'recording')
+    if (!recordings.length) { setDownloadedMbids(new Set()); return }
+    checkLibrary(recordings.map((r) => ({ mbid: r.mbid, title: r.name, artist: r.artist ?? '' })))
+      .then(setDownloadedMbids)
+      .catch(() => {})
+  }, [results])
 
   useSSE(
     `/api/progress/${activeJobId}`,
@@ -40,7 +54,7 @@ export default function SearchPage() {
       setActiveJobId(jobId)
       navigate('/queue')
     } catch {
-      // Remove from downloading set on error
+      // noop
     } finally {
       setDownloadingIds((prev) => {
         const next = new Set(prev)
@@ -65,6 +79,7 @@ export default function SearchPage() {
               result={r}
               onDownload={r.type === 'recording' ? handleDownload : undefined}
               downloading={downloadingIds.has(r.mbid)}
+              alreadyDownloaded={downloadedMbids.has(r.mbid)}
             />
           ))}
         </div>

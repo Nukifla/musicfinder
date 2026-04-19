@@ -36,6 +36,7 @@ export interface ArtistDetail {
   mbid: string
   name: string
   disambiguation: string | null
+  image_url: string | null
   release_groups: ArtistReleaseGroup[]
 }
 
@@ -53,8 +54,16 @@ export interface ReleaseGroupDetail {
 // Keep for any legacy callers
 export type SearchResult = UnifiedResult
 
-export async function search(q: string): Promise<UnifiedResult[]> {
-  const res = await client.get<UnifiedResult[]>('/search', { params: { q } })
+export async function search(q: string, signal?: AbortSignal): Promise<UnifiedResult[]> {
+  const res = await client.get<UnifiedResult[]>('/search', { params: { q }, signal })
+  return res.data
+}
+
+export async function searchByType(
+  q: string,
+  type: 'artist' | 'release_group' | 'recording',
+): Promise<UnifiedResult[]> {
+  const res = await client.get<UnifiedResult[]>('/search', { params: { q, type } })
   return res.data
 }
 

@@ -186,28 +186,88 @@ def _parse_recording(rec: dict) -> dict:
     }
 
 
+async def _mb_search_json(entity: str, query: str, limit: int) -> dict:
+    """Direct async MB JSON API call — no global rate-limiter thread."""
+    ua = f"{settings.mb_useragent_app}/{settings.mb_useragent_version} ({settings.mb_useragent_email})"
+    params = {"query": query, "limit": limit, "fmt": "json"}
+    async with httpx.AsyncClient() as client:
+        for attempt in range(2):
+            try:
+                r = await client.get(
+                    f"https://musicbrainz.org/ws/2/{entity}",
+                    params=params,
+                    headers={"User-Agent": ua},
+                    timeout=10.0,
+                )
+                if r.status_code == 503 and attempt == 0:
+                    await asyncio.sleep(1.0)
+                    continue
+                if r.status_code == 200:
+                    return r.json()
+                return {}
+            except Exception:
+                if attempt == 0:
+                    await asyncio.sleep(0.5)
+                    continue
+    return {}
+
+
 async def search_recordings(query: str, limit: int = 25) -> list[SearchResult]:
     key = f"recordings:{query}:{limit}"
     cached = _cache_get(key)
     if cached is not None:
         return cached  # type: ignore[return-value]
 
-    def _search():
-        return mb.search_recordings(query, limit=limit)
-
-    try:
-        result = await asyncio.to_thread(_search)
-    except mb.WebServiceError:
-        return []
-
-    recordings = result.get("recording-list", [])
-    parsed = [_parse_recording(r) for r in recordings]
-
+    data = await _mb_search_json("recording", query, limit)
     results = []
-    for p in parsed:
-        release_mbid = p.get("release_mbid")
-        cover_art_url = f"{CAA_BASE}/{release_mbid}/front-250" if release_mbid else None
-        results.append(SearchResult(cover_art_url=cover_art_url, **p))
+    for rec in data.get("recordings", []):
+        artist, artist_mbid = "", None
+        for item in rec.get("artist-credit", []):
+            if isinstance(item, dict) and "artist" in item:
+                artist = item["artist"].get("name", "")
+                artist_mbid = item["artist"].get("id")
+                break
+
+        release_mbid = album = year = track_number = None
+        releases = rec.get("releases", [])
+        if releases:
+            rel = releases[0]
+            release_mbid = rel.get("id")
+            album = rel.get("title")
+            date = rel.get("date", "")
+            if date and date[:4].isdigit():
+                year = int(date[:4])
+            for medium in rel.get("media", []):
+                for track in medium.get("tracks", []):
+                    pos = track.get("position") or track.get("number")
+                    try:
+                        track_number = int(pos)
+                    except (TypeError, ValueError):
+                        pass
+                    break
+                if track_number is not None:
+                    break
+
+        duration_ms = None
+        if rec.get("length"):
+            try:
+                duration_ms = int(rec["length"])
+            except (ValueError, TypeError):
+                pass
+
+        results.append(SearchResult(
+            mbid=rec["id"],
+            title=rec.get("title", ""),
+            artist=artist,
+            artist_mbid=artist_mbid,
+            album=album,
+            release_mbid=release_mbid,
+            track_number=track_number,
+            duration_ms=duration_ms,
+            year=year,
+            score=int(rec.get("score", 0)),
+            cover_art_url=f"{CAA_BASE}/{release_mbid}/front-250" if release_mbid else None,
+        ))
 
     _cache_set(key, results)
     return results
@@ -311,34 +371,28 @@ async def _fetch_artist_images_sparql(mbids: list[str]) -> dict[str, str]:
         return {}
 
 
-async def search_artists(query: str, limit: int = 5) -> list[dict]:
-    key = f"artists:{query}:{limit}"
+async def search_artists(query: str, limit: int = 5, include_images: bool = False) -> list[dict]:
+    key = f"artists:{query}:{limit}:{include_images}"
     cached = _cache_get(key)
     if cached is not None:
         return cached  # type: ignore[return-value]
 
-    def _search():
-        return mb.search_artists(query, limit=limit)
-
-    try:
-        result = await asyncio.to_thread(_search)
-    except mb.WebServiceError:
-        return []
-
-    artists = result.get("artist-list", [])
+    data = await _mb_search_json("artist", query, limit)
     out = [
         {
             "mbid": a["id"],
             "name": a.get("name", ""),
             "disambiguation": a.get("disambiguation"),
-            "score": int(a.get("ext:score", 0)),
+            "score": int(a.get("score", 0)),
+            "image_url": None,
         }
-        for a in artists
+        for a in data.get("artists", [])
     ]
 
-    image_map = await _fetch_artist_images_sparql([a["mbid"] for a in out])
-    for a in out:
-        a["image_url"] = image_map.get(a["mbid"])
+    if include_images:
+        image_map = await _fetch_artist_images_sparql([a["mbid"] for a in out])
+        for a in out:
+            a["image_url"] = image_map.get(a["mbid"])
 
     _cache_set(key, out)
     return out
@@ -350,28 +404,22 @@ async def search_release_groups(query: str, limit: int = 8) -> list[dict]:
     if cached is not None:
         return cached  # type: ignore[return-value]
 
-    def _search():
-        return mb.search_release_groups(query, limit=limit)
-
-    try:
-        result = await asyncio.to_thread(_search)
-    except mb.WebServiceError:
-        return []
-
-    rgroups = result.get("release-group-list", [])
-
+    data = await _mb_search_json("release-group", query, limit)
     parsed = []
-    for rg in rgroups:
-        artist = rg.get("artist-credit-phrase", "")
-        artist_mbid = None
+    for rg in data.get("release-groups", []):
         ac = rg.get("artist-credit", [])
-        if ac and isinstance(ac[0], dict) and "artist" in ac[0]:
-            artist_mbid = ac[0]["artist"].get("id")
+        parts, artist_mbid = [], None
+        for item in ac:
+            if isinstance(item, dict) and "artist" in item:
+                parts.append(item["artist"].get("name", ""))
+                if not artist_mbid:
+                    artist_mbid = item["artist"].get("id")
+            elif isinstance(item, str):
+                parts.append(item)
+        artist = "".join(parts)
 
         date = rg.get("first-release-date", "")
-        year = None
-        if date and date[:4].isdigit():
-            year = int(date[:4])
+        year = int(date[:4]) if date and date[:4].isdigit() else None
 
         parsed.append({
             "mbid": rg["id"],
@@ -380,7 +428,7 @@ async def search_release_groups(query: str, limit: int = 8) -> list[dict]:
             "artist_mbid": artist_mbid,
             "type": rg.get("primary-type", "Other"),
             "year": year,
-            "score": int(rg.get("ext:score", 0)),
+            "score": int(rg.get("score", 0)),
             "cover_art_url": f"{CAA_RG_BASE}/{rg['id']}/front-250",
         })
 

@@ -46,7 +46,25 @@ async def init_schema(db: aiosqlite.Connection) -> None:
 
         INSERT OR IGNORE INTO settings (key, value) VALUES
             ('path_template',  '{artist}/{album}/{track} {title}'),
-            ('default_format', 'bestaudio[ext=webm]/bestaudio[ext=m4a]/bestaudio');
+            ('default_format', 'bestaudio[ext=webm]/bestaudio[ext=m4a]/bestaudio'),
+            ('search_artist_images', 'false');
+
+        CREATE TABLE IF NOT EXISTS library (
+            id         INTEGER PRIMARY KEY AUTOINCREMENT,
+            file_path  TEXT NOT NULL UNIQUE,
+            artist     TEXT,
+            album      TEXT,
+            title      TEXT,
+            mbid       TEXT,
+            scanned_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
+        );
+        CREATE INDEX IF NOT EXISTS idx_library_mbid ON library(mbid);
+        CREATE INDEX IF NOT EXISTS idx_library_artist_title ON library(artist, title);
+
+        CREATE TABLE IF NOT EXISTS library_meta (
+            key   TEXT PRIMARY KEY,
+            value TEXT NOT NULL
+        );
     """)
     await db.commit()
 
