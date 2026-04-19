@@ -3,6 +3,7 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 
 from fastapi import FastAPI
+from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
 from config import settings
@@ -57,7 +58,11 @@ app.include_router(cookies.router)
 app.include_router(settings_router.router)
 app.include_router(library_router.router)
 
-# Serve React build — mount LAST so it catches all non-API routes
+# Serve React build
 static_dir = Path(__file__).parent / "static"
 if static_dir.exists():
-    app.mount("/", StaticFiles(directory=str(static_dir), html=True), name="static")
+    app.mount("/assets", StaticFiles(directory=str(static_dir / "assets")), name="assets")
+
+    @app.get("/{full_path:path}")
+    async def serve_spa(full_path: str):
+        return FileResponse(static_dir / "index.html")
