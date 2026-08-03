@@ -1,4 +1,5 @@
 import asyncio
+import re
 import time
 from typing import Optional
 from urllib.parse import quote as urlquote, unquote as urlunquote
@@ -210,6 +211,22 @@ async def _mb_search_json(entity: str, query: str, limit: int) -> dict:
                     await asyncio.sleep(0.5)
                     continue
     return {}
+
+
+_LUCENE_SPECIAL = re.compile(r'([+\-!(){}\[\]^"~*?:\\/])')
+
+
+def _lucene_escape(s: str) -> str:
+    return _LUCENE_SPECIAL.sub(r"\\\1", s)
+
+
+def build_exact_recording_query(title: str, artist: str) -> str:
+    """Field-scoped query for when the title/artist are already known exactly
+    (e.g. from audio fingerprint recognition) rather than user-typed free
+    text. Plain bag-of-words search (`search_recordings`'s normal use) ranks
+    covers/parodies alongside the original with no reliable preference —
+    scoping to `recording:`/`artist:` fields fixes that."""
+    return f'recording:"{_lucene_escape(title)}" AND artist:"{_lucene_escape(artist)}"'
 
 
 async def search_recordings(query: str, limit: int = 25) -> list[SearchResult]:

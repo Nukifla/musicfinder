@@ -19,6 +19,17 @@ class UnifiedResult(BaseModel):
     duration_ms: Optional[int] = None
 
 
+class RecognizeMatch(BaseModel):
+    title: str
+    artist: str
+    cover_art_url: Optional[str] = None
+
+
+class RecognizeResponse(BaseModel):
+    match: Optional[RecognizeMatch] = None
+    results: list[UnifiedResult] = []
+
+
 class TrackSummary(BaseModel):
     mbid: str
     title: str

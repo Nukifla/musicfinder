@@ -8,7 +8,7 @@ interface Props {
 
 export default function SearchBar({ value, onChange, loading }: Props) {
   return (
-    <div className="relative max-w-2xl w-full">
+    <div className="relative max-w-2xl w-full flex-1 min-w-0">
       <div className="absolute inset-y-0 left-3 flex items-center pointer-events-none">
         {loading ? (
           <Loader2 size={18} className="text-zinc-500 animate-spin" />

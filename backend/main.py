@@ -11,6 +11,7 @@ from database import get_db, close_db
 from services.job_manager import job_manager
 from routers import search, downloads, progress, cookies, settings as settings_router
 from routers import library as library_router
+from routers import recognize as recognize_router
 from services.library_scanner import scan_library
 
 
@@ -72,6 +73,7 @@ app.include_router(progress.router)
 app.include_router(cookies.router)
 app.include_router(settings_router.router)
 app.include_router(library_router.router)
+app.include_router(recognize_router.router)
 
 # Serve React build
 static_dir = Path(__file__).parent / "static"
