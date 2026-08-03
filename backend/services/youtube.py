@@ -168,8 +168,9 @@ async def download_audio(
             return os.path.join(out_dir, all_files[0]), yt_track_number
         return None
 
-    try:
-        return await asyncio.to_thread(_download)
-    except Exception as e:
-        job_manager.emit(job_id, {"status": "error", "error": str(e), "stage": "download_error"})
-        return None
+    # Let exceptions propagate — _run_download's own error handler already
+    # records the message and emits it. Catching here and returning None
+    # used to overwrite the specific yt-dlp error (e.g. an age-restriction
+    # notice telling the user to add cookies) with a generic "file not
+    # found" message once the caller re-raised on the falsy result.
+    return await asyncio.to_thread(_download)

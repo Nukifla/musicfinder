@@ -39,7 +39,7 @@ async def start_download(req: DownloadRequest, background_tasks: BackgroundTasks
             release_mbid = releases[0].get("id")
             album = releases[0].get("title")
 
-    job_id = job_manager.create_job(title=title, artist=artist, album=album)
+    job_id = job_manager.create_job(title=title, artist=artist, album=album, mbid=req.mbid)
     loop = asyncio.get_running_loop()
     job_manager.set_loop(loop)
 

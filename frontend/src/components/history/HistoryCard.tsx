@@ -36,6 +36,9 @@ export default function HistoryCard({ record, onDelete }: Props) {
           {record.album ? ` · ${record.album}` : ''}
         </p>
         <p className="text-[11px] text-zinc-600 mt-1">{meta}</p>
+        {record.status === 'error' && record.error_msg && (
+          <p className="text-xs text-red-400 mt-1 line-clamp-2">{record.error_msg}</p>
+        )}
       </div>
       <button
         onClick={() => onDelete(record.id)}

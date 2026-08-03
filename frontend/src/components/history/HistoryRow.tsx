@@ -27,11 +27,16 @@ export default function HistoryRow({ record, onDelete }: Props) {
   return (
     <tr className="border-b border-surface-border hover:bg-surface-hover transition-colors">
       <td className="px-4 py-3 text-sm text-zinc-100">
-        <div className="flex items-center gap-2">
-          {statusIcon(record.status)}
-          <div>
+        <div className="flex items-start gap-2">
+          <div className="mt-0.5">{statusIcon(record.status)}</div>
+          <div className="min-w-0">
             <p className="truncate max-w-xs font-medium">{record.title}</p>
             <p className="text-xs text-zinc-500">{record.artist}</p>
+            {record.status === 'error' && record.error_msg && (
+              <p className="text-xs text-red-400 mt-0.5 max-w-xs line-clamp-2" title={record.error_msg}>
+                {record.error_msg}
+              </p>
+            )}
           </div>
         </div>
       </td>

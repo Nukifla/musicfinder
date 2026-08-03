@@ -13,6 +13,7 @@ class JobState:
     title: str
     artist: str
     album: Optional[str]
+    mbid: str = ""
     status: str = "pending"
     progress: int = 0
     stage: str = "pending"
@@ -28,6 +29,7 @@ class JobState:
     def to_event(self) -> dict:
         return {
             "job_id": self.job_id,
+            "mbid": self.mbid,
             "title": self.title,
             "artist": self.artist,
             "album": self.album,
@@ -39,6 +41,7 @@ class JobState:
             "error": self.error,
             "final_path": self.final_path,
             "youtube_url": self.youtube_url,
+            "created_at": self.created_at * 1000,
         }
 
 
@@ -67,7 +70,7 @@ class JobManager:
                 del self._jobs[jid]
 
     def create_job(
-        self, title: str, artist: str, album: Optional[str] = None
+        self, title: str, artist: str, album: Optional[str] = None, mbid: str = ""
     ) -> str:
         job_id = str(uuid.uuid4())
         self._jobs[job_id] = JobState(
@@ -75,6 +78,7 @@ class JobManager:
             title=title,
             artist=artist,
             album=album,
+            mbid=mbid,
         )
         return job_id
 

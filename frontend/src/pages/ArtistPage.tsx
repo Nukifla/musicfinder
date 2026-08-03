@@ -34,8 +34,8 @@ export default function ArtistPage() {
   const [artist, setArtist] = useState<ArtistDetail | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  const [downloadingRg, setDownloadingRg] = useState<string | null>(null)
-  const [downloadingType, setDownloadingType] = useState<string | null>(null)
+  const [downloadingRgIds, setDownloadingRgIds] = useState<Set<string>>(new Set())
+  const [downloadingTypes, setDownloadingTypes] = useState<Set<string>>(new Set())
   const [downloadedRgMbids, setDownloadedRgMbids] = useState<Set<string>>(new Set())
   const [checkedRgMbids, setCheckedRgMbids] = useState<Set<string>>(new Set())
   const [scanningMbid, setScanningMbid] = useState<string | null>(null)
@@ -114,8 +114,8 @@ export default function ArtistPage() {
 
   const handleDownloadAlbum = async (e: React.MouseEvent, rg: ArtistReleaseGroup) => {
     e.stopPropagation()
-    if (downloadingRg) return
-    setDownloadingRg(rg.mbid)
+    if (downloadingRgIds.has(rg.mbid)) return
+    setDownloadingRgIds((prev) => new Set(prev).add(rg.mbid))
     try {
       const detail = await getReleaseGroup(rg.mbid)
       cacheAlbum(rg.mbid, detail)
@@ -135,13 +135,17 @@ export default function ArtistPage() {
     } catch {
       // noop
     } finally {
-      setDownloadingRg(null)
+      setDownloadingRgIds((prev) => {
+        const next = new Set(prev)
+        next.delete(rg.mbid)
+        return next
+      })
     }
   }
 
   const handleDownloadAll = async (type: string, items: ArtistReleaseGroup[]) => {
-    if (downloadingType) return
-    setDownloadingType(type)
+    if (downloadingTypes.has(type)) return
+    setDownloadingTypes((prev) => new Set(prev).add(type))
     try {
       for (const rg of items) {
         const detail = await getReleaseGroup(rg.mbid)
@@ -163,7 +167,11 @@ export default function ArtistPage() {
     } catch {
       // noop
     } finally {
-      setDownloadingType(null)
+      setDownloadingTypes((prev) => {
+        const next = new Set(prev)
+        next.delete(type)
+        return next
+      })
     }
   }
 
@@ -222,11 +230,11 @@ export default function ArtistPage() {
               {(type === 'Album' || type === 'Single') && (
                 <button
                   onClick={() => handleDownloadAll(type, items)}
-                  disabled={!!downloadingType}
+                  disabled={downloadingTypes.has(type)}
                   className="flex items-center gap-1.5 min-h-touch px-3 -mr-3 rounded-lg text-xs text-zinc-400 active:bg-surface-hover hover:text-zinc-100 disabled:opacity-50 transition-colors"
                   aria-label={`Download all ${type.toLowerCase()}s`}
                 >
-                  {downloadingType === type
+                  {downloadingTypes.has(type)
                     ? <Loader2 size={12} className="animate-spin" />
                     : <Download size={12} />}
                   Download all
@@ -259,7 +267,7 @@ export default function ArtistPage() {
                       ) : null}
                       <button
                         onClick={(e) => handleDownloadAlbum(e, rg)}
-                        disabled={downloadingRg === rg.mbid}
+                        disabled={downloadingRgIds.has(rg.mbid)}
                         aria-label={isDownloaded ? 'Already downloaded' : 'Download album'}
                         className={`hidden md:flex absolute bottom-2 right-2 h-11 w-11 items-center justify-center rounded-lg transition-opacity disabled:opacity-60 focus-visible:opacity-100 md:group-focus-within:opacity-100 ${
                           isDownloaded
@@ -267,7 +275,7 @@ export default function ArtistPage() {
                             : 'opacity-0 md:group-hover:opacity-100 bg-black/70 text-white hover:bg-accent'
                         }`}
                       >
-                        {downloadingRg === rg.mbid
+                        {downloadingRgIds.has(rg.mbid)
                           ? <Loader2 size={16} className="animate-spin" />
                           : isDownloaded
                             ? <CheckCircle2 size={16} />
@@ -282,19 +290,19 @@ export default function ArtistPage() {
                     )}
                     <button
                       onClick={(e) => handleDownloadAlbum(e, rg)}
-                      disabled={downloadingRg === rg.mbid}
+                      disabled={downloadingRgIds.has(rg.mbid)}
                       className={`md:hidden mt-2 w-full flex items-center justify-center gap-1.5 min-h-touch rounded-lg text-xs font-medium disabled:opacity-50 transition-colors ${
                         isDownloaded
                           ? 'bg-green-900/40 text-green-400 border border-green-700/50'
                           : 'bg-accent active:bg-accent-light'
                       }`}
                     >
-                      {downloadingRg === rg.mbid
+                      {downloadingRgIds.has(rg.mbid)
                         ? <Loader2 size={13} className="animate-spin" />
                         : isDownloaded
                           ? <CheckCircle2 size={13} />
                           : <Download size={13} />}
-                      {downloadingRg === rg.mbid ? 'Adding…' : isDownloaded ? 'Downloaded' : 'Download'}
+                      {downloadingRgIds.has(rg.mbid) ? 'Adding…' : isDownloaded ? 'Downloaded' : 'Download'}
                     </button>
                   </div>
                 )

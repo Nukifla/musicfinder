@@ -1,8 +1,9 @@
-import { Download, Clock, User, ChevronRight, CheckCircle2 } from 'lucide-react'
+import { Download, Clock, User, ChevronRight, CheckCircle2, Loader2, AlertCircle } from 'lucide-react'
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import AlbumArt from './AlbumArt'
 import { UnifiedResult } from '../../api/search'
+import { useJobStatusForMbid } from '../../hooks/useJobStatusForMbid'
 
 function ArtistThumb({ url, name }: { url: string | null | undefined; name: string }) {
   const [failed, setFailed] = useState(false)
@@ -28,7 +29,6 @@ function ArtistThumb({ url, name }: { url: string | null | undefined; name: stri
 interface Props {
   result: UnifiedResult
   onDownload?: (result: UnifiedResult) => void
-  downloading?: boolean
   alreadyDownloaded?: boolean
 }
 
@@ -43,8 +43,9 @@ function formatDuration(ms: number | null | undefined): string {
 const baseCard =
   'flex items-center gap-3 px-3 py-2.5 md:gap-4 md:px-4 md:py-3 rounded-xl bg-surface-card border border-surface-border transition-all'
 
-export default function UnifiedResultCard({ result, onDownload, downloading = false, alreadyDownloaded = false }: Props) {
+export default function UnifiedResultCard({ result, onDownload, alreadyDownloaded = false }: Props) {
   const navigate = useNavigate()
+  const job = useJobStatusForMbid(result.type === 'recording' ? result.mbid : '')
 
   if (result.type === 'artist') {
     return (
@@ -91,6 +92,19 @@ export default function UnifiedResultCard({ result, onDownload, downloading = fa
   }
 
   // recording
+  const downloaded = alreadyDownloaded || job.status === 'downloaded'
+  const isError = job.status === 'error'
+  const isBusy = job.status === 'queued' || job.status === 'downloading'
+  const label = isError
+    ? 'Failed'
+    : job.status === 'queued'
+      ? 'Queued…'
+      : job.status === 'downloading'
+        ? 'Downloading…'
+        : downloaded
+          ? 'Downloaded'
+          : 'Download'
+
   return (
     <div className={`${baseCard} hover:border-accent/40 hover:bg-surface-hover group`}>
       <AlbumArt url={result.cover_art_url ?? null} title={result.name} size={48} />
@@ -102,8 +116,11 @@ export default function UnifiedResultCard({ result, onDownload, downloading = fa
           {result.year && <span className="text-zinc-600"> · {result.year}</span>}
           {result.duration_ms && <span className="text-zinc-600 sm:hidden"> · {formatDuration(result.duration_ms)}</span>}
         </p>
+        {isError && job.error && (
+          <p className="text-xs text-red-400 mt-1 line-clamp-2">{job.error}</p>
+        )}
       </div>
-      <div className="flex items-center gap-3 md:gap-4 shrink-0">
+      <div className="flex items-center gap-3 md:gap-4 shrink-0 self-start md:self-center">
         {result.duration_ms && (
           <span className="hidden sm:flex text-xs text-zinc-500 items-center gap-1">
             <Clock size={12} />
@@ -112,20 +129,25 @@ export default function UnifiedResultCard({ result, onDownload, downloading = fa
         )}
         <button
           onClick={() => onDownload?.(result)}
-          disabled={downloading || alreadyDownloaded}
-          aria-label={alreadyDownloaded ? 'Downloaded' : 'Download'}
+          disabled={isBusy || downloaded}
+          aria-label={label}
+          title={isError && job.error ? job.error : undefined}
           className={`flex items-center justify-center gap-1.5 min-h-touch min-w-touch sm:min-w-0 px-0 sm:px-3.5 rounded-lg text-sm sm:text-xs font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${
-            alreadyDownloaded
-              ? 'bg-green-900/40 text-green-400 border border-green-700/50 hover:bg-green-900/60'
-              : 'bg-accent hover:bg-accent-light'
+            isError
+              ? 'bg-red-950/40 text-red-400 border border-red-800/50 hover:bg-red-950/70'
+              : downloaded
+                ? 'bg-green-900/40 text-green-400 border border-green-700/50 hover:bg-green-900/60'
+                : 'bg-accent hover:bg-accent-light'
           }`}
         >
-          {alreadyDownloaded
-            ? <CheckCircle2 size={13} />
-            : <Download size={13} />}
-          <span className="hidden sm:inline">
-            {downloading ? 'Adding…' : alreadyDownloaded ? 'Downloaded' : 'Download'}
-          </span>
+          {isBusy
+            ? <Loader2 size={13} className="animate-spin" />
+            : isError
+              ? <AlertCircle size={13} />
+              : downloaded
+                ? <CheckCircle2 size={13} />
+                : <Download size={13} />}
+          <span className="hidden sm:inline">{label}</span>
         </button>
       </div>
     </div>

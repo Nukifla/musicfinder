@@ -5,11 +5,13 @@ import TopBar from './TopBar'
 import BottomTabs from './BottomTabs'
 import UpdateBanner from './UpdateBanner'
 import { useUpdateWatcher } from '../../hooks/useUpdateWatcher'
+import { useGlobalDownloads } from '../../hooks/useGlobalDownloads'
 
 export default function Shell() {
   const mainRef = useRef<HTMLElement>(null)
   const { pathname } = useLocation()
   useUpdateWatcher()
+  useGlobalDownloads()
 
   useEffect(() => {
     mainRef.current?.scrollTo(0, 0)
