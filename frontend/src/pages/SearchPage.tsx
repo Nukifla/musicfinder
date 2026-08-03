@@ -8,7 +8,6 @@ import { useSearch } from '../hooks/useSearch'
 import { useDownload } from '../hooks/useDownload'
 import { useNavStore } from '../store/navStore'
 import { UnifiedResult } from '../api/search'
-import { RecognizeResponse } from '../api/recognize'
 import { checkLibrary } from '../api/library'
 
 export default function SearchPage() {
@@ -16,7 +15,8 @@ export default function SearchPage() {
   const setLastBrowseRoute = useNavStore((s) => s.setLastBrowseRoute)
   const { download } = useDownload()
   const [downloadedMbids, setDownloadedMbids] = useState<Set<string>>(new Set())
-  const [listenResult, setListenResult] = useState<RecognizeResponse | null>(null)
+  const listenResult = useNavStore((s) => s.listenResult)
+  const setListenResult = useNavStore((s) => s.setListenResult)
 
   useEffect(() => { setLastBrowseRoute('/') }, [])
 
