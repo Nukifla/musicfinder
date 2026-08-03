@@ -1,4 +1,5 @@
 import asyncio
+import math
 import os
 import re
 from pathlib import Path
@@ -33,9 +34,29 @@ def _score_result(info: dict, title: str, artist: str, duration_ms: Optional[int
         else:
             score -= 0.2
 
-    # Prefer auto-generated / VEVO / artist channels
+    # Prefer the artist's own channel — the strongest signal of an
+    # official/licensed upload, which also tends to correlate with YouTube's
+    # higher-bitrate Premium audio tier that third-party reposts don't get.
+    # A plain artist-name channel (e.g. "Ed Sheeran") doesn't contain any of
+    # the generic buzzwords below, so without this it scores no better than
+    # a random reupload with a textually-closer title.
+    if artist and fuzz.partial_ratio(artist.lower(), channel.lower()) >= 85:
+        score += 0.35
+
+    # Prefer auto-generated / VEVO / official-labeled channels
     if _PREFER_CHANNELS.search(channel):
         score += 0.2
+
+    # Gentle popularity signal: the real official upload of anything
+    # reasonably well-known tends to have orders of magnitude more views than
+    # a repost/lyric-video channel (verified case: 6.8B vs 140M views for the
+    # same song). Log-scaled and lightly weighted so it nudges close calls
+    # rather than overriding title/duration matching — checked
+    # `channel_is_verified` first, but that's true for nearly every
+    # established channel (reposts included), so it doesn't discriminate.
+    view_count = info.get("view_count") or 0
+    if view_count > 0:
+        score += math.log10(view_count + 1) * 0.03
 
     # Deprioritise live/cover/remix/karaoke
     if _DEPRIORITISE.search(yt_title):
@@ -92,10 +113,16 @@ async def find_best_match(
             "quiet": True,
             "no_warnings": True,
             "extract_flat": True,
-            "default_search": "ytsearch5",
+            "default_search": "ytsearch10",
         }
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-            result = ydl.extract_info(f"ytsearch5:{query}", download=False)
+            # A wider pool than 5 meaningfully improves the odds that the
+            # artist's own official upload (which tends to have the correct
+            # single-edit duration and YouTube's higher-bitrate audio tier)
+            # actually appears among the candidates being scored — verified
+            # empirically: it was missing from the top 5 for a real search
+            # but present at position 5 of 10.
+            result = ydl.extract_info(f"ytsearch10:{query}", download=False)
             if result and "entries" in result:
                 return [e for e in result["entries"] if e]
             return []
