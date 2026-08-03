@@ -28,21 +28,30 @@ export default function CookieUpload({ status, onRefresh }: Props) {
 
   return (
     <div className="flex flex-col gap-3">
-      <div className="flex items-center gap-2 text-sm text-zinc-400">
-        <Info size={14} />
+      <div className="flex items-start gap-2 text-sm text-zinc-400">
+        <Info size={14} className="shrink-0 mt-0.5" />
         <span>Upload a Netscape-format cookies.txt to enable YouTube Premium audio quality.</span>
       </div>
 
       {status && (
-        <div className={`flex items-center gap-2 text-sm px-3 py-2 rounded-lg ${
+        <div className={`flex items-start gap-2 text-sm px-3 py-2 rounded-lg ${
           status.present && status.valid ? 'bg-green-900/30 text-green-400' : 'bg-zinc-800 text-zinc-400'
         }`}>
           {status.present && status.valid ? (
-            <><CheckCircle size={14} /> Cookie file present and valid ({status.size_bytes ? `${Math.round(status.size_bytes / 1024)} KB` : ''})</>
+            <>
+              <CheckCircle size={14} className="shrink-0 mt-0.5" />
+              <span>Cookie file present and valid ({status.size_bytes ? `${Math.round(status.size_bytes / 1024)} KB` : ''})</span>
+            </>
           ) : status.present ? (
-            <><AlertCircle size={14} /> Cookie file present but invalid</>
+            <>
+              <AlertCircle size={14} className="shrink-0 mt-0.5" />
+              <span>Cookie file present but invalid</span>
+            </>
           ) : (
-            <><AlertCircle size={14} /> No cookie file uploaded</>
+            <>
+              <AlertCircle size={14} className="shrink-0 mt-0.5" />
+              <span>No cookie file uploaded</span>
+            </>
           )}
         </div>
       )}
@@ -62,7 +71,7 @@ export default function CookieUpload({ status, onRefresh }: Props) {
       <button
         onClick={() => fileRef.current?.click()}
         disabled={uploading}
-        className="flex items-center gap-2 px-4 py-2 rounded-lg border border-surface-border bg-surface-hover text-sm text-zinc-300 hover:text-zinc-100 hover:border-accent/50 disabled:opacity-50 transition-colors w-fit"
+        className="flex items-center justify-center gap-2 px-5 min-h-touch rounded-lg border border-surface-border bg-surface-hover text-sm text-zinc-300 hover:text-zinc-100 hover:border-accent/50 disabled:opacity-50 transition-colors w-full sm:w-auto"
       >
         <Upload size={14} />
         {uploading ? 'Uploading…' : 'Upload cookies.txt'}

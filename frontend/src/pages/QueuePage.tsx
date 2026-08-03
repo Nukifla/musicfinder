@@ -8,14 +8,27 @@ export default function QueuePage() {
   const { jobs, addJob, updateJob } = useQueueStore()
 
   useEffect(() => {
-    listDownloads(50).then((records) => {
-      for (const r of records) {
-        if (r.status === 'complete' || r.status === 'error') continue
-        if (jobs[r.job_id]) continue
-        addJob({ job_id: r.job_id, title: r.title, artist: r.artist, album: r.album ?? null })
-        updateJob(r.job_id, { status: r.status, error: r.error_msg ?? null, final_path: r.file_path ?? null, youtube_url: r.youtube_url ?? null })
-      }
-    }).catch(() => {})
+    const sync = () => {
+      listDownloads(50).then((records) => {
+        for (const r of records) {
+          if (r.status === 'complete' || r.status === 'error') continue
+          const current = useQueueStore.getState().jobs
+          if (!current[r.job_id]) {
+            addJob({ job_id: r.job_id, title: r.title, artist: r.artist, album: r.album ?? null })
+          }
+          // Re-sync status even for already-tracked jobs — a backgrounded
+          // standalone PWA can miss SSE events entirely while suspended.
+          updateJob(r.job_id, { status: r.status, error: r.error_msg ?? null, final_path: r.file_path ?? null, youtube_url: r.youtube_url ?? null })
+        }
+      }).catch(() => {})
+    }
+
+    sync()
+    const onVisible = () => {
+      if (document.visibilityState === 'visible') sync()
+    }
+    document.addEventListener('visibilitychange', onVisible)
+    return () => document.removeEventListener('visibilitychange', onVisible)
   }, [])
 
   const activeJobIds = Object.values(jobs)

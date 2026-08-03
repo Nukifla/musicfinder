@@ -14,6 +14,7 @@ from mutagen.id3 import (
     TDRC,
     TIT2,
     TPE1,
+    TPE2,
     TRCK,
 )
 from mutagen.mp4 import MP4, MP4Cover
@@ -46,6 +47,7 @@ async def tag_file(
     path: str,
     title: str,
     artist: str,
+    album_artist: Optional[str],
     album: Optional[str],
     track_number: Optional[int],
     year: Optional[int],
@@ -55,16 +57,16 @@ async def tag_file(
     fmt = _detect_format(path)
 
     if fmt in ("webm", "ogg", "opus"):
-        _tag_vorbis(path, title, artist, album, track_number, year, cover_data, fmt)
+        _tag_vorbis(path, title, artist, album_artist, album, track_number, year, cover_data, fmt)
     elif fmt in ("mp3",):
-        _tag_mp3(path, title, artist, album, track_number, year, cover_data)
+        _tag_mp3(path, title, artist, album_artist, album, track_number, year, cover_data)
     elif fmt in ("m4a", "mp4", "aac"):
-        _tag_mp4(path, title, artist, album, track_number, year, cover_data)
+        _tag_mp4(path, title, artist, album_artist, album, track_number, year, cover_data)
     elif fmt == "flac":
-        _tag_flac(path, title, artist, album, track_number, year, cover_data)
+        _tag_flac(path, title, artist, album_artist, album, track_number, year, cover_data)
 
 
-def _tag_vorbis(path, title, artist, album, track_number, year, cover_data, fmt):
+def _tag_vorbis(path, title, artist, album_artist, album, track_number, year, cover_data, fmt):
     try:
         if fmt == "opus":
             audio = OggOpus(path)
@@ -83,6 +85,8 @@ def _tag_vorbis(path, title, artist, album, track_number, year, cover_data, fmt)
         audio["title"] = [title]
     if artist:
         audio["artist"] = [artist]
+    if album_artist:
+        audio["albumartist"] = [album_artist]
     if album:
         audio["album"] = [album]
     if track_number:
@@ -103,7 +107,7 @@ def _tag_vorbis(path, title, artist, album, track_number, year, cover_data, fmt)
     audio.save()
 
 
-def _tag_mp3(path, title, artist, album, track_number, year, cover_data):
+def _tag_mp3(path, title, artist, album_artist, album, track_number, year, cover_data):
     try:
         audio = ID3(path)
     except ID3NoHeaderError:
@@ -113,6 +117,8 @@ def _tag_mp3(path, title, artist, album, track_number, year, cover_data):
         audio["TIT2"] = TIT2(encoding=3, text=title)
     if artist:
         audio["TPE1"] = TPE1(encoding=3, text=artist)
+    if album_artist:
+        audio["TPE2"] = TPE2(encoding=3, text=album_artist)
     if album:
         audio["TALB"] = TALB(encoding=3, text=album)
     if track_number:
@@ -130,7 +136,7 @@ def _tag_mp3(path, title, artist, album, track_number, year, cover_data):
     audio.save(path)
 
 
-def _tag_mp4(path, title, artist, album, track_number, year, cover_data):
+def _tag_mp4(path, title, artist, album_artist, album, track_number, year, cover_data):
     audio = MP4(path)
     tags = audio.tags
     if tags is None:
@@ -141,6 +147,8 @@ def _tag_mp4(path, title, artist, album, track_number, year, cover_data):
         tags["\xa9nam"] = [title]
     if artist:
         tags["\xa9ART"] = [artist]
+    if album_artist:
+        tags["aART"] = [album_artist]
     if album:
         tags["\xa9alb"] = [album]
     if track_number:
@@ -153,12 +161,14 @@ def _tag_mp4(path, title, artist, album, track_number, year, cover_data):
     audio.save()
 
 
-def _tag_flac(path, title, artist, album, track_number, year, cover_data):
+def _tag_flac(path, title, artist, album_artist, album, track_number, year, cover_data):
     audio = FLAC(path)
     if title:
         audio["title"] = [title]
     if artist:
         audio["artist"] = [artist]
+    if album_artist:
+        audio["albumartist"] = [album_artist]
     if album:
         audio["album"] = [album]
     if track_number:

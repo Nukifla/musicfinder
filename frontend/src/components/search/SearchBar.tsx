@@ -17,19 +17,25 @@ export default function SearchBar({ value, onChange, loading }: Props) {
         )}
       </div>
       <input
-        type="text"
+        type="search"
+        inputMode="search"
+        enterKeyHint="search"
+        autoCorrect="off"
+        autoCapitalize="none"
+        spellCheck={false}
         value={value}
         onChange={(e) => onChange(e.target.value)}
         placeholder="Search for a track, artist, or album…"
-        className="w-full bg-surface-card border border-surface-border rounded-xl pl-10 pr-10 py-3 text-sm text-zinc-100 placeholder-zinc-500 focus:outline-none focus:border-accent focus:ring-1 focus:ring-accent transition-colors"
-        autoFocus
+        className="w-full bg-surface-card border border-surface-border rounded-xl pl-10 pr-12 py-3 text-base sm:text-sm text-zinc-100 placeholder-zinc-500 focus:outline-none focus:border-accent focus:ring-1 focus:ring-accent transition-colors"
+        autoFocus={typeof window !== 'undefined' && window.matchMedia('(pointer: fine)').matches}
       />
       {value && (
         <button
           onClick={() => onChange('')}
-          className="absolute inset-y-0 right-3 flex items-center text-zinc-500 hover:text-zinc-300"
+          aria-label="Clear search"
+          className="absolute right-1 top-1/2 -translate-y-1/2 h-11 w-11 flex items-center justify-center rounded-lg text-zinc-500 hover:text-zinc-300 active:bg-surface-hover"
         >
-          <X size={16} />
+          <X size={18} />
         </button>
       )}
     </div>

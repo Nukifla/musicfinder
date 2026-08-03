@@ -82,6 +82,7 @@ async def _run_download(
 
     # Get release details
     album = None
+    album_artist = artist  # falls back to the track's own credited artist
     track_number = None
     year = None
 
@@ -89,6 +90,10 @@ async def _run_download(
         release = await get_release_full(release_mbid)
         if release:
             album = release.get("title")
+            if release.get("artist-credit"):
+                rac = release["artist-credit"][0]
+                if isinstance(rac, dict) and "artist" in rac:
+                    album_artist = rac["artist"].get("name", artist)
             date = release.get("date", "")
             if date:
                 year = int(date[:4]) if date[:4].isdigit() else None
@@ -132,9 +137,15 @@ async def _run_download(
 
         # Download
         out_dir = os.path.join(settings.tmp_dir, job_id)
-        file_path = await download_audio(job_id, yt_url, out_dir, fmt_selector, loop)
-        if not file_path or not os.path.exists(file_path):
+        download_result = await download_audio(job_id, yt_url, out_dir, fmt_selector, loop)
+        if not download_result or not os.path.exists(download_result[0]):
             raise ValueError("Download failed — file not found")
+        file_path, yt_track_number = download_result
+
+        # MusicBrainz didn't have a track number for this recording — fall back to
+        # whatever YouTube's music-attribution metadata provided, if anything.
+        if track_number is None and yt_track_number is not None:
+            track_number = yt_track_number
 
         await job_manager.emit_async(job_id, {"stage": "tagging", "progress": 92, "status": "tagging"})
 
@@ -143,6 +154,7 @@ async def _run_download(
             path=file_path,
             title=title,
             artist=artist,
+            album_artist=album_artist,
             album=album,
             track_number=track_number,
             year=year,
@@ -159,7 +171,7 @@ async def _run_download(
             base_dir=settings.music_dir,
             template=path_template,
             title=title,
-            artist=artist,
+            artist=album_artist,
             album=album,
             track_number=track_number,
             year=year,
@@ -178,8 +190,8 @@ async def _run_download(
 
         await db.execute(
             """UPDATE downloads SET status='complete', file_path=?, file_format=?, file_size=?,
-               youtube_url=?, completed_at=strftime('%Y-%m-%dT%H:%M:%fZ','now') WHERE job_id=?""",
-            (final_path, ext, file_size, yt_url, job_id),
+               youtube_url=?, track_number=?, completed_at=strftime('%Y-%m-%dT%H:%M:%fZ','now') WHERE job_id=?""",
+            (final_path, ext, file_size, yt_url, track_number, job_id),
         )
         await db.commit()
 

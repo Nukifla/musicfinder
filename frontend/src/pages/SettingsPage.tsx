@@ -3,7 +3,76 @@ import SettingsForm from '../components/settings/SettingsForm'
 import CookieUpload from '../components/settings/CookieUpload'
 import { getSettings, getCookieStatus, Settings, CookieStatus } from '../api/settings'
 import { getLibraryStatus, scanLibrary, LibraryStatus } from '../api/library'
-import { RefreshCw, Library } from 'lucide-react'
+import { RefreshCw, Library, Sparkles, Trash2 } from 'lucide-react'
+import { useUpdateStore, clearCacheAndReload, CURRENT_BUILD_ID } from '../store/updateStore'
+
+function AppUpdateSection() {
+  const { updateAvailable, checking, latestVersion, checkNow } = useUpdateStore()
+  const [clearing, setClearing] = useState(false)
+  const [justChecked, setJustChecked] = useState(false)
+
+  const handleCheck = async () => {
+    await checkNow()
+    setJustChecked(true)
+    setTimeout(() => setJustChecked(false), 2000)
+  }
+
+  const handleClear = () => {
+    setClearing(true)
+    clearCacheAndReload()
+  }
+
+  return (
+    <section>
+      <h2 className="text-sm font-semibold text-zinc-300 mb-4 flex items-center gap-2">
+        <Sparkles size={14} />
+        App Updates
+      </h2>
+      <div className="bg-surface-card border border-surface-border rounded-xl px-4 py-3 flex flex-col gap-3">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+          <div className="text-sm">
+            <p className="text-zinc-400">
+              Running build <span className="text-zinc-200 font-mono">{CURRENT_BUILD_ID}</span>
+            </p>
+            <p className="text-zinc-500 text-xs mt-0.5">
+              {updateAvailable
+                ? `New build available: ${latestVersion?.buildId}`
+                : justChecked
+                  ? 'You are on the latest version.'
+                  : 'Checked automatically every 15 minutes.'}
+            </p>
+          </div>
+          <button
+            onClick={handleCheck}
+            disabled={checking}
+            className="flex items-center justify-center gap-2 px-3 min-h-touch rounded-lg text-xs font-medium bg-surface-hover border border-surface-border hover:border-accent/50 disabled:opacity-50 transition-colors shrink-0 w-full sm:w-auto"
+          >
+            <RefreshCw size={13} className={checking ? 'animate-spin' : ''} />
+            {checking ? 'Checking…' : 'Check for Updates'}
+          </button>
+        </div>
+
+        <div className="border-t border-surface-border pt-3 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+          <p className="text-xs text-zinc-500">
+            If the app looks stuck on an old version after a new release, clear its cache and reload.
+          </p>
+          <button
+            onClick={handleClear}
+            disabled={clearing}
+            className={`flex items-center justify-center gap-2 px-3 min-h-touch rounded-lg text-xs font-medium disabled:opacity-50 transition-colors shrink-0 w-full sm:w-auto ${
+              updateAvailable
+                ? 'bg-accent hover:bg-accent-light'
+                : 'bg-surface-hover border border-surface-border hover:border-red-500/50 hover:text-red-400'
+            }`}
+          >
+            <Trash2 size={13} />
+            {clearing ? 'Clearing…' : 'Clear Cache & Reload'}
+          </button>
+        </div>
+      </div>
+    </section>
+  )
+}
 
 function LibrarySection() {
   const [status, setStatus] = useState<LibraryStatus | null>(null)
@@ -49,7 +118,7 @@ function LibrarySection() {
         <Library size={14} />
         Music Library
       </h2>
-      <div className="bg-surface-card border border-surface-border rounded-xl px-4 py-3 flex items-center justify-between gap-4">
+      <div className="bg-surface-card border border-surface-border rounded-xl px-4 py-3 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
         <div className="text-sm">
           <p className="text-zinc-400">
             Last scan: <span className="text-zinc-200">{formatDate(status?.last_scan ?? null)}</span>
@@ -61,7 +130,7 @@ function LibrarySection() {
         <button
           onClick={handleScan}
           disabled={status?.scanning}
-          className="flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-medium bg-accent hover:bg-accent-light disabled:opacity-50 disabled:cursor-not-allowed transition-colors shrink-0"
+          className="flex items-center justify-center gap-2 px-3 min-h-touch rounded-lg text-xs font-medium bg-accent hover:bg-accent-light disabled:opacity-50 disabled:cursor-not-allowed transition-colors shrink-0 w-full sm:w-auto"
         >
           <RefreshCw size={13} className={status?.scanning ? 'animate-spin' : ''} />
           {status?.scanning ? 'Scanning…' : 'Scan Now'}
@@ -113,6 +182,10 @@ export default function SettingsPage() {
       <div className="border-t border-surface-border" />
 
       <LibrarySection />
+
+      <div className="border-t border-surface-border" />
+
+      <AppUpdateSection />
     </div>
   )
 }

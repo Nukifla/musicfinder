@@ -63,6 +63,12 @@ export default function AlbumPage() {
       .catch(() => {})
   }, [detail])
 
+  const setPageTitle = useNavStore((s) => s.setPageTitle)
+  useEffect(() => {
+    if (detail) setPageTitle(detail.title)
+    return () => setPageTitle(null)
+  }, [detail])
+
   const handleDownloadAll = async () => {
     if (!detail || downloadingAll) return
     setDownloadingAll(true)
@@ -126,19 +132,19 @@ export default function AlbumPage() {
         onClick={() =>
           navigate(detail.artist_mbid ? `/artist/${detail.artist_mbid}` : '/')
         }
-        className="flex items-center gap-1 text-sm text-zinc-400 hover:text-zinc-100 transition-colors mb-6"
+        className="hidden md:flex items-center gap-1 text-sm text-zinc-400 hover:text-zinc-100 transition-colors mb-6"
       >
         <ChevronLeft size={16} />
         {detail.artist}
       </button>
 
-      <div className="flex gap-6 mb-8">
-        <div className="shrink-0 rounded-lg overflow-hidden">
-          <AlbumArt url={detail.cover_art_url} title={detail.title} size={120} />
+      <div className="flex flex-col sm:flex-row items-start gap-4 sm:gap-6 mb-6 md:mb-8">
+        <div className="shrink-0 rounded-lg overflow-hidden w-28 sm:w-[120px]">
+          <AlbumArt fill url={detail.cover_art_url} title={detail.title} />
         </div>
-        <div className="flex flex-col justify-center min-w-0">
-          <h1 className="text-2xl font-bold text-zinc-100 truncate">{detail.title}</h1>
-          <p className="text-sm text-zinc-400 mt-1">
+        <div className="flex flex-col justify-center min-w-0 w-full">
+          <h1 className="text-xl md:text-2xl font-bold text-zinc-100 break-words line-clamp-2">{detail.title}</h1>
+          <p className="text-sm text-zinc-400 mt-1 truncate">
             {detail.artist}
             {detail.year && <span> · {detail.year}</span>}
             <span> · {detail.tracks.length} track{detail.tracks.length !== 1 ? 's' : ''}</span>
@@ -149,7 +155,7 @@ export default function AlbumPage() {
               <button
                 onClick={handleDownloadAll}
                 disabled={downloadingAll}
-                className={`mt-3 self-start flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed transition-colors ${
+                className={`mt-3 w-full sm:w-auto sm:self-start flex items-center justify-center gap-2 px-4 min-h-touch rounded-lg text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed transition-colors ${
                   allDownloaded
                     ? 'bg-green-900/40 text-green-400 border border-green-700/50 hover:bg-green-900/60'
                     : 'bg-accent hover:bg-accent-light'
@@ -167,27 +173,35 @@ export default function AlbumPage() {
         {detail.tracks.map((track) => (
           <div
             key={track.mbid}
-            className="flex items-center gap-3 px-4 py-3 rounded-xl bg-surface-card border border-surface-border hover:border-accent/40 hover:bg-surface-hover transition-all"
+            className="flex items-center gap-3 px-3 md:px-4 py-3 rounded-xl bg-surface-card border border-surface-border active:bg-surface-hover md:hover:border-accent/40 md:hover:bg-surface-hover transition-all"
           >
             <span className="text-xs text-zinc-600 w-6 text-right shrink-0">{track.position}</span>
-            <span className="flex-1 text-sm text-zinc-200 truncate">{track.title}</span>
+            <span className="flex-1 min-w-0 text-sm text-zinc-200 truncate">
+              {track.title}
+              {track.duration_ms && (
+                <span className="sm:hidden text-zinc-500"> · {formatDuration(track.duration_ms)}</span>
+              )}
+            </span>
             {track.duration_ms && (
-              <span className="text-xs text-zinc-500 flex items-center gap-1 shrink-0">
+              <span className="hidden sm:flex text-xs text-zinc-500 items-center gap-1 shrink-0">
                 <Clock size={12} />
                 {formatDuration(track.duration_ms)}
               </span>
             )}
             <button
               onClick={() => handleDownload(track)}
-              disabled={downloadingIds.has(track.mbid)}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium disabled:opacity-50 disabled:cursor-not-allowed transition-colors shrink-0 ${
+              disabled={downloadingIds.has(track.mbid) || downloadedMbids.has(track.mbid)}
+              aria-label={downloadedMbids.has(track.mbid) ? 'Downloaded' : 'Download'}
+              className={`flex items-center justify-center gap-1.5 min-h-touch min-w-touch sm:min-w-0 px-0 sm:px-3 rounded-lg text-xs font-medium disabled:opacity-50 disabled:cursor-not-allowed transition-colors shrink-0 ${
                 downloadedMbids.has(track.mbid)
                   ? 'bg-green-900/40 text-green-400 border border-green-700/50 hover:bg-green-900/60'
                   : 'bg-accent hover:bg-accent-light'
               }`}
             >
               {downloadedMbids.has(track.mbid) ? <CheckCircle2 size={13} /> : <Download size={13} />}
-              {downloadingIds.has(track.mbid) ? 'Adding…' : downloadedMbids.has(track.mbid) ? 'Downloaded' : 'Download'}
+              <span className="hidden sm:inline">
+                {downloadingIds.has(track.mbid) ? 'Adding…' : downloadedMbids.has(track.mbid) ? 'Downloaded' : 'Download'}
+              </span>
             </button>
           </div>
         ))}

@@ -40,7 +40,8 @@ function formatDuration(ms: number | null | undefined): string {
   return `${m}:${s.toString().padStart(2, '0')}`
 }
 
-const baseCard = 'flex items-center gap-4 px-4 py-3 rounded-xl bg-surface-card border border-surface-border transition-all'
+const baseCard =
+  'flex items-center gap-3 px-3 py-2.5 md:gap-4 md:px-4 md:py-3 rounded-xl bg-surface-card border border-surface-border transition-all'
 
 export default function UnifiedResultCard({ result, onDownload, downloading = false, alreadyDownloaded = false }: Props) {
   const navigate = useNavigate()
@@ -48,7 +49,7 @@ export default function UnifiedResultCard({ result, onDownload, downloading = fa
   if (result.type === 'artist') {
     return (
       <div
-        className={`${baseCard} cursor-pointer hover:border-accent/40 hover:bg-surface-hover`}
+        className={`${baseCard} cursor-pointer hover:border-accent/40 hover:bg-surface-hover active:bg-surface-hover`}
         onClick={() => navigate(`/artist/${result.mbid}`)}
       >
         <ArtistThumb url={result.cover_art_url} name={result.name} />
@@ -66,7 +67,7 @@ export default function UnifiedResultCard({ result, onDownload, downloading = fa
   if (result.type === 'release_group') {
     return (
       <div
-        className={`${baseCard} cursor-pointer hover:border-accent/40 hover:bg-surface-hover`}
+        className={`${baseCard} cursor-pointer hover:border-accent/40 hover:bg-surface-hover active:bg-surface-hover`}
         onClick={() => navigate(`/album/${result.mbid}`)}
       >
         <AlbumArt url={result.cover_art_url ?? null} title={result.name} size={48} />
@@ -74,7 +75,7 @@ export default function UnifiedResultCard({ result, onDownload, downloading = fa
           <div className="flex items-center gap-2">
             <p className="text-sm font-semibold text-zinc-100 truncate">{result.name}</p>
             {result.release_type && (
-              <span className="shrink-0 text-[10px] font-medium px-1.5 py-0.5 rounded bg-accent-muted text-accent-light">
+              <span className="shrink-0 max-w-[64px] truncate text-[10px] font-medium px-1.5 py-0.5 rounded bg-accent-muted text-accent-light">
                 {result.release_type}
               </span>
             )}
@@ -99,19 +100,21 @@ export default function UnifiedResultCard({ result, onDownload, downloading = fa
           {result.artist}
           {result.album && <span className="text-zinc-600"> · {result.album}</span>}
           {result.year && <span className="text-zinc-600"> · {result.year}</span>}
+          {result.duration_ms && <span className="text-zinc-600 sm:hidden"> · {formatDuration(result.duration_ms)}</span>}
         </p>
       </div>
-      <div className="flex items-center gap-4 shrink-0">
+      <div className="flex items-center gap-3 md:gap-4 shrink-0">
         {result.duration_ms && (
-          <span className="text-xs text-zinc-500 flex items-center gap-1">
+          <span className="hidden sm:flex text-xs text-zinc-500 items-center gap-1">
             <Clock size={12} />
             {formatDuration(result.duration_ms)}
           </span>
         )}
         <button
           onClick={() => onDownload?.(result)}
-          disabled={downloading}
-          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${
+          disabled={downloading || alreadyDownloaded}
+          aria-label={alreadyDownloaded ? 'Downloaded' : 'Download'}
+          className={`flex items-center justify-center gap-1.5 min-h-touch min-w-touch sm:min-w-0 px-0 sm:px-3.5 rounded-lg text-sm sm:text-xs font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${
             alreadyDownloaded
               ? 'bg-green-900/40 text-green-400 border border-green-700/50 hover:bg-green-900/60'
               : 'bg-accent hover:bg-accent-light'
@@ -120,7 +123,9 @@ export default function UnifiedResultCard({ result, onDownload, downloading = fa
           {alreadyDownloaded
             ? <CheckCircle2 size={13} />
             : <Download size={13} />}
-          {downloading ? 'Adding…' : alreadyDownloaded ? 'Downloaded' : 'Download'}
+          <span className="hidden sm:inline">
+            {downloading ? 'Adding…' : alreadyDownloaded ? 'Downloaded' : 'Download'}
+          </span>
         </button>
       </div>
     </div>

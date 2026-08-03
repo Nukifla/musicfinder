@@ -1,4 +1,4 @@
-import { BrowserRouter, Routes, Route } from 'react-router-dom'
+import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import Shell from './components/layout/Shell'
 import SearchPage from './pages/SearchPage'
 import QueuePage from './pages/QueuePage'
@@ -18,6 +18,7 @@ export default function App() {
           <Route path="settings" element={<SettingsPage />} />
           <Route path="artist/:mbid" element={<ArtistPage />} />
           <Route path="album/:mbid" element={<AlbumPage />} />
+          <Route path="*" element={<Navigate to="/" replace />} />
         </Route>
       </Routes>
     </BrowserRouter>

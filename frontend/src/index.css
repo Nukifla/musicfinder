@@ -3,8 +3,25 @@
 @tailwind utilities;
 
 @layer base {
+  html {
+    -webkit-tap-highlight-color: transparent;
+    overscroll-behavior-y: none;
+  }
   body {
     @apply bg-surface text-zinc-100 antialiased;
+    overscroll-behavior-y: none;
+  }
+  button,
+  a,
+  [role='switch'] {
+    touch-action: manipulation;
+  }
+  @media (max-width: 767px) {
+    input,
+    select,
+    textarea {
+      font-size: 16px;
+    }
   }
   ::-webkit-scrollbar {
     width: 6px;

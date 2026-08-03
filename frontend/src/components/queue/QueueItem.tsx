@@ -40,17 +40,18 @@ export default function QueueItem({ job, onRemove }: Props) {
         </div>
         <button
           onClick={() => onRemove(job.job_id)}
-          className="text-zinc-600 hover:text-zinc-400 shrink-0"
+          aria-label="Remove from queue"
+          className="h-11 w-11 -mr-2 -mt-1 flex items-center justify-center rounded-lg shrink-0 text-zinc-500 hover:text-zinc-300 active:bg-surface-hover transition-colors"
         >
-          <X size={14} />
+          <X size={18} />
         </button>
       </div>
 
       <ProgressBar progress={job.progress} status={job.status} />
 
-      <div className="flex items-center justify-between text-xs text-zinc-500">
-        <span>{stageLabels[job.stage] ?? job.stage}</span>
-        <div className="flex items-center gap-3">
+      <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1 text-xs text-zinc-500">
+        <span className="min-w-0 truncate">{stageLabels[job.stage] ?? job.stage}</span>
+        <div className="flex items-center gap-3 shrink-0">
           {job.speed && <span>{job.speed}</span>}
           {job.eta && <span>ETA {job.eta}</span>}
           {!isError && <span>{job.progress}%</span>}
@@ -58,10 +59,10 @@ export default function QueueItem({ job, onRemove }: Props) {
       </div>
 
       {isError && job.error && (
-        <p className="text-xs text-red-400 truncate">{job.error}</p>
+        <p className="text-xs text-red-400 break-words">{job.error}</p>
       )}
       {isDone && job.final_path && (
-        <p className="text-xs text-zinc-600 truncate">{job.final_path}</p>
+        <p className="text-xs text-zinc-600 break-all line-clamp-2">{job.final_path}</p>
       )}
     </div>
   )

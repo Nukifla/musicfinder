@@ -42,10 +42,11 @@ export default function HistoryRow({ record, onDelete }: Props) {
         {record.file_path ?? '—'}
       </td>
       <td className="px-4 py-3 text-xs text-zinc-500 hidden sm:table-cell">{formatDate(record.created_at)}</td>
-      <td className="px-4 py-3">
+      <td className="px-2 py-3">
         <button
           onClick={() => onDelete(record.id)}
-          className="text-zinc-600 hover:text-red-400 transition-colors"
+          aria-label="Delete from history"
+          className="h-11 w-11 flex items-center justify-center rounded-lg text-zinc-600 hover:text-red-400 active:bg-surface-hover transition-colors"
         >
           <Trash2 size={14} />
         </button>

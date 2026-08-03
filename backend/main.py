@@ -3,7 +3,7 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 
 from fastapi import FastAPI
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, Response
 from fastapi.staticfiles import StaticFiles
 
 from config import settings
@@ -45,6 +45,21 @@ async def lifespan(app: FastAPI):
 app = FastAPI(title="MusicFinder", lifespan=lifespan)
 
 
+@app.middleware("http")
+async def add_cache_headers(request, call_next):
+    response: Response = await call_next(request)
+    path = request.url.path
+    if path.startswith("/assets/"):
+        # Vite content-hashes these filenames — safe to cache forever.
+        response.headers["Cache-Control"] = "public, max-age=31536000, immutable"
+    else:
+        # index.html (served for every SPA route) and the PWA manifest/service
+        # worker/version file must always revalidate, or an installed PWA can
+        # get stuck on a stale build after a new release is deployed.
+        response.headers.setdefault("Cache-Control", "no-cache")
+    return response
+
+
 @app.get("/health")
 async def health():
     return {"status": "ok"}
@@ -65,4 +80,8 @@ if static_dir.exists():
 
     @app.get("/{full_path:path}")
     async def serve_spa(full_path: str):
+        if full_path:
+            candidate = (static_dir / full_path).resolve()
+            if candidate.is_relative_to(static_dir.resolve()) and candidate.is_file():
+                return FileResponse(candidate)
         return FileResponse(static_dir / "index.html")

@@ -20,7 +20,14 @@ export default function HistoryPage() {
     }
   }
 
-  useEffect(() => { load() }, [])
+  useEffect(() => {
+    load()
+    const onVisible = () => {
+      if (document.visibilityState === 'visible') load()
+    }
+    document.addEventListener('visibilitychange', onVisible)
+    return () => document.removeEventListener('visibilitychange', onVisible)
+  }, [])
 
   const handleDelete = async (id: number) => {
     await deleteDownload(id)
@@ -34,7 +41,7 @@ export default function HistoryPage() {
         <button
           onClick={load}
           disabled={loading}
-          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs text-zinc-400 hover:text-zinc-100 hover:bg-surface-hover border border-surface-border transition-colors disabled:opacity-50"
+          className="flex items-center gap-1.5 px-3 min-h-touch rounded-lg text-xs text-zinc-400 hover:text-zinc-100 active:bg-surface-hover border border-surface-border transition-colors disabled:opacity-50"
         >
           <RefreshCw size={12} className={loading ? 'animate-spin' : ''} />
           Refresh

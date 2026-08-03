@@ -119,8 +119,10 @@ async def download_audio(
     out_dir: str,
     format_selector: str,
     loop: asyncio.AbstractEventLoop,
-) -> Optional[str]:
-    """Download audio to out_dir. Returns path to downloaded file."""
+) -> Optional[tuple[str, Optional[int]]]:
+    """Download audio to out_dir. Returns (path, yt_track_number) — track_number is
+    only populated when YouTube exposes music-attribution metadata for the video,
+    e.g. label-uploaded official audio."""
     os.makedirs(out_dir, exist_ok=True)
     outtmpl = os.path.join(out_dir, "%(id)s.%(ext)s")
 
@@ -141,23 +143,33 @@ async def download_audio(
         **cookies_opt,
     }
 
-    def _download() -> Optional[str]:
+    def _download() -> Optional[tuple[str, Optional[int]]]:
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-            ydl.extract_info(url, download=True)
+            info = ydl.extract_info(url, download=True)
+
+        yt_track_number = None
+        if info:
+            raw = info.get("track_number")
+            try:
+                yt_track_number = int(raw) if raw is not None else None
+            except (TypeError, ValueError):
+                yt_track_number = None
+
         # After FFmpegExtractAudio the extension changes; find the actual file.
         files = [
             f for f in os.listdir(out_dir)
             if not f.endswith(".part") and not f.endswith(".ytdl") and not f.endswith(".webm")
         ]
         if files:
-            return os.path.join(out_dir, files[0])
+            return os.path.join(out_dir, files[0]), yt_track_number
         # Fallback: any non-partial file
         all_files = [f for f in os.listdir(out_dir) if not f.endswith(".part")]
-        return os.path.join(out_dir, all_files[0]) if all_files else None
+        if all_files:
+            return os.path.join(out_dir, all_files[0]), yt_track_number
+        return None
 
     try:
-        path = await asyncio.to_thread(_download)
-        return path
+        return await asyncio.to_thread(_download)
     except Exception as e:
         job_manager.emit(job_id, {"status": "error", "error": str(e), "stage": "download_error"})
         return None
