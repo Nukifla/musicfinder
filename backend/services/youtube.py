@@ -131,8 +131,17 @@ async def download_audio(
     if os.path.exists(cookie_file):
         cookies_opt["cookiefile"] = cookie_file
 
+    # Some videos (age-restricted ones especially) only expose muxed
+    # video+audio formats and no audio-only stream at all, which makes an
+    # audio-only selector fail outright with "Requested format is not
+    # available" even though a perfectly downloadable format exists. Always
+    # fall back to `best` — FFmpegExtractAudio below still strips the audio
+    # track out of a muxed download, just at the cost of some wasted
+    # bandwidth on the video portion.
+    full_format_selector = f"{format_selector}/best"
+
     ydl_opts: dict[str, Any] = {
-        "format": format_selector,
+        "format": full_format_selector,
         "outtmpl": outtmpl,
         "quiet": True,
         "no_warnings": True,
