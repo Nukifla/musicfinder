@@ -3,6 +3,7 @@ uvicorn[standard]>=0.29
 pydantic-settings>=2.2
 aiosqlite>=0.20
 yt-dlp>=2024.4.0
+yt-dlp-ejs>=0.8.0
 musicbrainzngs>=0.7.1
 mutagen>=1.47
 rapidfuzz>=3.8
