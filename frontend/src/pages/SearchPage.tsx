@@ -7,7 +7,7 @@ import AlbumArt from '../components/search/AlbumArt'
 import { useSearch } from '../hooks/useSearch'
 import { useDownload } from '../hooks/useDownload'
 import { useNavStore } from '../store/navStore'
-import { UnifiedResult } from '../api/search'
+import { UnifiedResult, getReleaseGroup } from '../api/search'
 import { checkLibrary } from '../api/library'
 
 export default function SearchPage() {
@@ -15,6 +15,8 @@ export default function SearchPage() {
   const setLastBrowseRoute = useNavStore((s) => s.setLastBrowseRoute)
   const { download } = useDownload()
   const [downloadedMbids, setDownloadedMbids] = useState<Set<string>>(new Set())
+  const [downloadingRgIds, setDownloadingRgIds] = useState<Set<string>>(new Set())
+  const [downloadedRgIds, setDownloadedRgIds] = useState<Set<string>>(new Set())
   const listenResult = useNavStore((s) => s.listenResult)
   const setListenResult = useNavStore((s) => s.setListenResult)
 
@@ -41,6 +43,33 @@ export default function SearchPage() {
       )
     } catch {
       // noop
+    }
+  }
+
+  const handleDownloadAlbum = async (result: UnifiedResult) => {
+    if (downloadingRgIds.has(result.mbid)) return
+    setDownloadingRgIds((prev) => new Set(prev).add(result.mbid))
+    try {
+      const detail = await getReleaseGroup(result.mbid)
+      const downloaded = await checkLibrary(
+        detail.tracks.map((t) => ({ mbid: t.mbid, title: t.title, artist: detail.artist })),
+      )
+      const missing = detail.tracks.filter((t) => !downloaded.has(t.mbid))
+      if (missing.length === 0) {
+        setDownloadedRgIds((prev) => new Set(prev).add(result.mbid))
+      } else {
+        await Promise.all(
+          missing.map((track) => download(track.mbid, track.title, detail.artist, detail.title, detail.release_mbid)),
+        )
+      }
+    } catch {
+      // noop
+    } finally {
+      setDownloadingRgIds((prev) => {
+        const next = new Set(prev)
+        next.delete(result.mbid)
+        return next
+      })
     }
   }
 
@@ -88,7 +117,13 @@ export default function SearchPage() {
                 <UnifiedResultCard key={`listen-artist-${listenResult.artist.mbid}`} result={listenResult.artist} />
               )}
               {listenResult.release_group && (
-                <UnifiedResultCard key={`listen-rg-${listenResult.release_group.mbid}`} result={listenResult.release_group} />
+                <UnifiedResultCard
+                  key={`listen-rg-${listenResult.release_group.mbid}`}
+                  result={listenResult.release_group}
+                  onDownloadAlbum={handleDownloadAlbum}
+                  downloadingAlbum={downloadingRgIds.has(listenResult.release_group.mbid)}
+                  albumDownloaded={downloadedRgIds.has(listenResult.release_group.mbid)}
+                />
               )}
             </div>
           )}
@@ -120,6 +155,9 @@ export default function SearchPage() {
               result={r}
               onDownload={r.type === 'recording' ? handleDownload : undefined}
               alreadyDownloaded={downloadedMbids.has(r.mbid)}
+              onDownloadAlbum={r.type === 'release_group' ? handleDownloadAlbum : undefined}
+              downloadingAlbum={downloadingRgIds.has(r.mbid)}
+              albumDownloaded={downloadedRgIds.has(r.mbid)}
             />
           ))}
         </div>

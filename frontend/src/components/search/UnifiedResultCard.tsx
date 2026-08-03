@@ -30,6 +30,9 @@ interface Props {
   result: UnifiedResult
   onDownload?: (result: UnifiedResult) => void
   alreadyDownloaded?: boolean
+  onDownloadAlbum?: (result: UnifiedResult) => void
+  downloadingAlbum?: boolean
+  albumDownloaded?: boolean
 }
 
 function formatDuration(ms: number | null | undefined): string {
@@ -43,7 +46,14 @@ function formatDuration(ms: number | null | undefined): string {
 const baseCard =
   'flex items-center gap-3 px-3 py-2.5 md:gap-4 md:px-4 md:py-3 rounded-xl bg-surface-card border border-surface-border transition-all'
 
-export default function UnifiedResultCard({ result, onDownload, alreadyDownloaded = false }: Props) {
+export default function UnifiedResultCard({
+  result,
+  onDownload,
+  alreadyDownloaded = false,
+  onDownloadAlbum,
+  downloadingAlbum = false,
+  albumDownloaded = false,
+}: Props) {
   const navigate = useNavigate()
   const job = useJobStatusForMbid(result.type === 'recording' ? result.mbid : '')
 
@@ -86,6 +96,28 @@ export default function UnifiedResultCard({ result, onDownload, alreadyDownloade
             {result.year && <span className="text-zinc-600"> · {result.year}</span>}
           </p>
         </div>
+        {onDownloadAlbum && (
+          <button
+            onClick={(e) => {
+              e.stopPropagation()
+              onDownloadAlbum(result)
+            }}
+            disabled={downloadingAlbum || albumDownloaded}
+            aria-label={albumDownloaded ? 'Album downloaded' : 'Download album'}
+            title={albumDownloaded ? 'Album downloaded' : 'Download album'}
+            className={`h-11 w-11 shrink-0 flex items-center justify-center rounded-lg transition-colors disabled:cursor-not-allowed ${
+              albumDownloaded
+                ? 'text-green-400'
+                : 'text-zinc-400 hover:text-zinc-100 active:bg-surface-hover'
+            }`}
+          >
+            {downloadingAlbum
+              ? <Loader2 size={16} className="animate-spin" />
+              : albumDownloaded
+                ? <CheckCircle2 size={16} />
+                : <Download size={16} />}
+          </button>
+        )}
         <ChevronRight size={16} className="text-zinc-500 shrink-0" />
       </div>
     )
