@@ -4,11 +4,14 @@ import { UnifiedResult } from './search'
 export interface RecognizeMatch {
   title: string
   artist: string
+  album: string | null
   cover_art_url: string | null
 }
 
 export interface RecognizeResponse {
   match: RecognizeMatch | null
+  artist: UnifiedResult | null
+  release_group: UnifiedResult | null
   results: UnifiedResult[]
 }
 

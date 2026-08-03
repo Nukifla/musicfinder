@@ -10,7 +10,8 @@ async def identify_audio(input_path: str) -> Optional[dict]:
     """Normalize an uploaded clip via ffmpeg (whatever container the browser's
     MediaRecorder produced — webm/opus, mp4/aac, etc. — ffmpeg auto-detects
     from content, no extension needed) and run it through Shazam. Returns
-    {"title", "artist", "cover_art_url"} or None if nothing matched."""
+    {"title", "artist", "album", "cover_art_url"} or None if nothing matched.
+    "album" may be None — Shazam doesn't always include it."""
     wav_path = f"{input_path}.wav"
 
     def _convert() -> bool:
@@ -39,8 +40,18 @@ async def identify_audio(input_path: str) -> Optional[dict]:
     images = track.get("images") or {}
     cover_art_url = images.get("coverarthq") or images.get("coverart")
 
+    album = None
+    for section in track.get("sections", []):
+        if section.get("type") != "SONG":
+            continue
+        for item in section.get("metadata", []):
+            if item.get("title") == "Album":
+                album = item.get("text")
+                break
+
     return {
         "title": track.get("title", ""),
         "artist": track.get("subtitle", ""),
+        "album": album,
         "cover_art_url": cover_art_url,
     }

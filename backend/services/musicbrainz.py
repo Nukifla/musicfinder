@@ -187,8 +187,10 @@ def _parse_recording(rec: dict) -> dict:
     }
 
 
-async def _mb_search_json(entity: str, query: str, limit: int) -> dict:
-    """Direct async MB JSON API call — no global rate-limiter thread."""
+async def _mb_search_json(entity: str, query: str, limit: int) -> Optional[dict]:
+    """Direct async MB JSON API call — no global rate-limiter thread.
+    Returns None on failure (distinct from a genuine zero-match {} response)
+    so callers know not to cache a transient failure as "no results"."""
     ua = f"{settings.mb_useragent_app}/{settings.mb_useragent_version} ({settings.mb_useragent_email})"
     params = {"query": query, "limit": limit, "fmt": "json"}
     async with httpx.AsyncClient() as client:
@@ -205,12 +207,12 @@ async def _mb_search_json(entity: str, query: str, limit: int) -> dict:
                     continue
                 if r.status_code == 200:
                     return r.json()
-                return {}
+                return None
             except Exception:
                 if attempt == 0:
                     await asyncio.sleep(0.5)
                     continue
-    return {}
+    return None
 
 
 _LUCENE_SPECIAL = re.compile(r'([+\-!(){}\[\]^"~*?:\\/])')
@@ -229,6 +231,12 @@ def build_exact_recording_query(title: str, artist: str) -> str:
     return f'recording:"{_lucene_escape(title)}" AND artist:"{_lucene_escape(artist)}"'
 
 
+def build_exact_release_group_query(album: str, artist: str) -> str:
+    """Same idea as build_exact_recording_query, for looking up the album
+    (release-group) an identified track belongs to."""
+    return f'releasegroup:"{_lucene_escape(album)}" AND artist:"{_lucene_escape(artist)}"'
+
+
 async def search_recordings(query: str, limit: int = 25) -> list[SearchResult]:
     key = f"recordings:{query}:{limit}"
     cached = _cache_get(key)
@@ -236,6 +244,8 @@ async def search_recordings(query: str, limit: int = 25) -> list[SearchResult]:
         return cached  # type: ignore[return-value]
 
     data = await _mb_search_json("recording", query, limit)
+    if data is None:
+        return []  # transient failure — don't cache as "no results"
     results = []
     for rec in data.get("recordings", []):
         artist, artist_mbid = "", None
@@ -395,6 +405,8 @@ async def search_artists(query: str, limit: int = 5, include_images: bool = Fals
         return cached  # type: ignore[return-value]
 
     data = await _mb_search_json("artist", query, limit)
+    if data is None:
+        return []  # transient failure — don't cache as "no results"
     out = [
         {
             "mbid": a["id"],
@@ -422,6 +434,8 @@ async def search_release_groups(query: str, limit: int = 8) -> list[dict]:
         return cached  # type: ignore[return-value]
 
     data = await _mb_search_json("release-group", query, limit)
+    if data is None:
+        return []  # transient failure — don't cache as "no results"
     parsed = []
     for rg in data.get("release-groups", []):
         ac = rg.get("artist-credit", [])

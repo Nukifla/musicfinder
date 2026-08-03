@@ -82,7 +82,17 @@ export default function SearchPage() {
               Couldn't identify that — try again with clearer audio.
             </div>
           )}
-          {listenResult.results.length > 0 && (
+          {(listenResult.artist || listenResult.release_group) && (
+            <div className="flex flex-col gap-2 mb-2">
+              {listenResult.artist && (
+                <UnifiedResultCard key={`listen-artist-${listenResult.artist.mbid}`} result={listenResult.artist} />
+              )}
+              {listenResult.release_group && (
+                <UnifiedResultCard key={`listen-rg-${listenResult.release_group.mbid}`} result={listenResult.release_group} />
+              )}
+            </div>
+          )}
+          {listenResult.results.length > 0 ? (
             <div className="flex flex-col gap-2">
               {listenResult.results.map((r) => (
                 <UnifiedResultCard
@@ -93,7 +103,9 @@ export default function SearchPage() {
                 />
               ))}
             </div>
-          )}
+          ) : listenResult.match ? (
+            <p className="text-sm text-zinc-500">No exact recording match found in MusicBrainz for this track.</p>
+          ) : null}
         </div>
       )}
 

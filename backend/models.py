@@ -22,11 +22,14 @@ class UnifiedResult(BaseModel):
 class RecognizeMatch(BaseModel):
     title: str
     artist: str
+    album: Optional[str] = None
     cover_art_url: Optional[str] = None
 
 
 class RecognizeResponse(BaseModel):
     match: Optional[RecognizeMatch] = None
+    artist: Optional[UnifiedResult] = None
+    release_group: Optional[UnifiedResult] = None
     results: list[UnifiedResult] = []
 
 

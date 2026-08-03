@@ -5,7 +5,13 @@ from fastapi import APIRouter, File, UploadFile
 
 from config import settings
 from models import RecognizeMatch, RecognizeResponse, UnifiedResult
-from services.musicbrainz import build_exact_recording_query, search_recordings
+from services.musicbrainz import (
+    build_exact_recording_query,
+    build_exact_release_group_query,
+    search_artists,
+    search_recordings,
+    search_release_groups,
+)
 from services.recognize import identify_audio
 
 router = APIRouter(prefix="/api/recognize", tags=["recognize"])
@@ -41,7 +47,34 @@ async def recognize(file: UploadFile = File(...)):
         for rec in recordings
     ]
 
+    artist_result = None
+    if match["artist"]:
+        artists = await search_artists(match["artist"], limit=1)
+        if artists:
+            a = artists[0]
+            artist_result = UnifiedResult(
+                type="artist", mbid=a["mbid"], name=a["name"], score=a["score"],
+                disambiguation=a.get("disambiguation"), cover_art_url=a.get("image_url"),
+            )
+
+    release_group_result = None
+    if match.get("album") and match["artist"]:
+        rg_query = build_exact_release_group_query(match["album"], match["artist"])
+        rgroups = await search_release_groups(rg_query, limit=1)
+        if rgroups:
+            rg = rgroups[0]
+            release_group_result = UnifiedResult(
+                type="release_group", mbid=rg["mbid"], name=rg["title"], score=rg["score"],
+                artist=rg.get("artist"), artist_mbid=rg.get("artist_mbid"),
+                release_type=rg.get("type"), year=rg.get("year"), cover_art_url=rg.get("cover_art_url"),
+            )
+
     return RecognizeResponse(
-        match=RecognizeMatch(title=match["title"], artist=match["artist"], cover_art_url=match["cover_art_url"]),
+        match=RecognizeMatch(
+            title=match["title"], artist=match["artist"], album=match.get("album"),
+            cover_art_url=match["cover_art_url"],
+        ),
+        artist=artist_result,
+        release_group=release_group_result,
         results=results,
     )
